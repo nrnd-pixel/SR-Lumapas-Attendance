@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#315fa8">
+  <title>SR Lumapas Attendance Pilot v1.0</title>
+  <style>
+    :root{
+      font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:#182230;background:#f4f7fb;
+      --blue:#315fa8;--blue2:#eaf1fb;--greenbg:#e8f6ef;
+      --red:#a93636;--amberbg:#fff4d8;--border:#dbe3ef;--muted:#667085
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:#f4f7fb}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .app{max-width:760px;margin:0 auto;padding:14px 12px 96px}
+    .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:4px 0 14px}
+    .brand h1{font-size:22px;margin:0}.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+    .role-pill{display:inline-block;margin-top:5px;padding:4px 8px;border-radius:999px;background:#eaf1fb;color:#274b7d;font-size:11px;font-weight:800}
+    .date-row{display:flex;gap:7px;align-items:center}.date-row input{flex:1}.today-btn{min-height:44px;white-space:nowrap;padding:8px 11px}
+    .school-scope{font-size:12px;color:#475467;margin-top:6px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px}
+    .hidden{display:none!important}
+    .login{max-width:430px;margin:48px auto 0}.login h2{margin:0 0 4px}.login p{color:var(--muted);margin:0 0 16px}
+    .field{display:grid;gap:6px;margin:10px 0}.field label{font-size:13px;font-weight:650}
+    .field input,.field select,.field textarea,select.status,select.reason{
+      width:100%;min-height:44px;border:1px solid #cbd5e1;border-radius:10px;padding:10px 11px;background:#fff;color:#182230
+    }
+    .btn{min-height:44px;border:0;border-radius:11px;padding:10px 14px;font-weight:750}
+    .btn-primary{background:var(--blue);color:#fff}.btn-light{background:#eef2f7;color:#344054}.btn-danger{background:#fff0f0;color:#a93636}
+    .btn:disabled{opacity:.5;cursor:not-allowed}.full{width:100%}.msg{margin-top:10px;font-size:13px;color:var(--red)}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .mini-label{display:block;color:var(--muted);font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+    .banner{border-radius:12px;padding:11px 12px;margin-top:10px;font-size:13px}
+    .banner.info{background:var(--blue2);color:#274b7d}.banner.warn{background:var(--amberbg);color:#704b00}.banner.ok{background:var(--greenbg);color:#0d6039}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.actions .btn{flex:1 1 160px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .stat{background:#fff;border:1px solid var(--border);border-radius:13px;padding:10px;text-align:center}
+    .stat strong{font-size:20px;display:block}.stat span{font-size:11px;color:var(--muted)}
+    .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 8px}
+    .section-head h2{font-size:17px;margin:0}.count{font-size:12px;color:var(--muted)}
+    .student{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:9px}
+    .student.changed{box-shadow:0 0 0 2px #315fa8 inset;background:#f8fbff}
+    .change-badge{font-size:10px;padding:3px 7px;border-radius:999px;background:#dbeafe;color:#1e4f91;display:inline-block;margin-left:6px}
+    .correction-box{margin-top:12px;border:1px solid #b9ccef;background:#f5f8ff;border-radius:12px;padding:12px}
+    .correction-box strong{display:block;margin-bottom:3px}
+    .correction-box p{margin:0 0 9px;color:#475467;font-size:12px;line-height:1.4}
+    .correction-box textarea{width:100%;min-height:72px;border:1px solid #b9c4d5;border-radius:10px;padding:10px;resize:vertical}
+    .correction-meta{font-size:12px;color:#475467;margin-top:7px}
+    .student-top{display:flex;gap:10px;align-items:flex-start}
+    .num{min-width:28px;height:28px;border-radius:999px;background:#edf2f8;display:grid;place-items:center;font-size:12px;font-weight:800;color:#475467}
+    .student-name{font-weight:760;line-height:1.28;flex:1}
+    .badge{font-size:10px;padding:3px 7px;border-radius:999px;background:#f2f4f7;color:#475467;display:inline-block;margin-top:5px}
+    .badge.special{background:#fff1d6;color:#7a4c00}
+    .student-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:8px;margin-top:10px}
+    .student-grid .reason-wrap,.note-wrap{grid-column:1/-1}.student textarea{min-height:62px;resize:vertical}
+    .status-present{border-left:5px solid #35a36a}.status-absent{border-left:5px solid #d75a5a}
+    .status-late{border-left:5px solid #d39b2e}.status-permission{border-left:5px solid #5c84ca}
+    .status-other{border-left:5px solid #98a2b3}.status-empty{border-left:5px solid #d0d5dd}
+    .savebar{position:sticky;bottom:10px;background:rgba(244,247,251,.96);padding:10px 0 0;backdrop-filter:blur(8px)}
+    .savebox{background:#fff;border:1px solid var(--border);border-radius:15px;padding:10px;display:flex;gap:9px;align-items:center}
+    .savebox .summary{flex:1;min-width:0}.savebox strong{display:block}.savebox span{font-size:12px;color:var(--muted)}
+    .spinner{width:18px;height:18px;border:2px solid #d0d5dd;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:-4px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .nav-tabs{display:flex;gap:7px;margin:0 0 12px;overflow-x:auto;padding-bottom:2px}
+    .nav-btn{border:1px solid var(--border);background:#fff;color:#344054;border-radius:999px;padding:9px 13px;font-weight:750;white-space:nowrap}
+    .nav-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.toolbar .field{margin:0;flex:1 1 180px}.toolbar .btn{flex:0 0 auto}
+    .list-card{background:#fff;border:1px solid var(--border);border-radius:13px;padding:11px;margin:8px 0}
+    .list-title{font-weight:780;line-height:1.3}.list-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45}
+    .row-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.row-actions .btn{min-height:38px;padding:8px 10px;font-size:12px}
+    .chip{display:inline-block;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800;background:#eef2f7;color:#475467;margin-right:4px}
+    .chip.pending{background:#fff4d8;color:#704b00}.chip.approved,.chip.active{background:#e8f6ef;color:#0d6039}.chip.rejected,.chip.inactive{background:#fff0f0;color:#a93636}
+    .empty-state{text-align:center;color:var(--muted);font-size:13px;padding:22px 8px}
+    .gate{max-width:520px;margin:36px auto 0}.gate h2{margin:0 0 5px}.gate p{color:var(--muted);line-height:1.5}
+    .gate-status{padding:12px;border-radius:12px;background:#fff4d8;color:#704b00;margin:12px 0;font-size:13px}
+    .signup-note{font-size:12px;color:var(--muted);line-height:1.45}
+    dialog{width:min(94vw,520px);border:0;border-radius:16px;padding:0;box-shadow:0 18px 60px rgba(16,24,40,.25)}
+    dialog::backdrop{background:rgba(16,24,40,.55)}
+    .dialog-card{padding:16px}.dialog-card h3{margin:0 0 5px}.dialog-card p{margin:0 0 12px;color:var(--muted);font-size:13px;line-height:1.45}
+    .dialog-actions{display:flex;gap:8px;margin-top:14px}.dialog-actions .btn{flex:1}
+    .admin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+    .admin-metric{border:1px solid var(--border);border-radius:12px;padding:9px;text-align:center;background:#fff}.admin-metric strong{display:block;font-size:19px}.admin-metric span{font-size:10px;color:var(--muted)}
+    .subtle{font-size:12px;color:var(--muted)}
+    .stats-report-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+    .report-metric,.gender-metric{background:#fff;border:1px solid var(--border);border-radius:13px;padding:12px;text-align:center}
+    .report-metric span,.gender-metric span{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+    .report-metric strong,.gender-metric strong{display:block;font-size:21px}.report-metric small{font-size:10px;color:var(--muted)}
+    .gender-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+    .stats-table{width:100%;border-collapse:collapse;min-width:650px;background:#fff}
+    .stats-table th,.stats-table td{padding:9px 8px;border-bottom:1px solid #edf0f5;text-align:right;font-size:12px;white-space:nowrap}
+    .stats-table th:first-child,.stats-table td:first-child{text-align:left}.stats-table th{background:#f8fafc;color:#475467;font-size:11px;position:sticky;top:0}
+    .stats-table tr:last-child td{border-bottom:0}.stats-table tr.missing-row td{background:#fff8e8;color:#704b00}.empty-cell{text-align:center!important;color:var(--muted)!important;padding:22px!important}
+    .dashboard-table{min-width:560px}.dashboard-status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800}.dashboard-status.saved{background:#e8f6ef;color:#0d6039}.dashboard-status.missing{background:#fff4d8;color:#704b00}.dashboard-view{min-height:32px;padding:5px 9px;font-size:11px}
+    @media(max-width:600px){.stats-report-grid,.gender-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:460px){
+      .app{padding-left:10px;padding-right:10px}.brand h1{font-size:20px}.controls{grid-template-columns:1fr}
+      .stats{grid-template-columns:repeat(3,1fr)}.stat strong{font-size:18px}.student-grid{grid-template-columns:1fr}
+      .student-grid .reason-wrap,.note-wrap{grid-column:auto}.savebox{align-items:stretch;flex-direction:column}.savebox .btn{width:100%}
+      .admin-grid{grid-template-columns:1fr}.toolbar{align-items:stretch}.toolbar .btn{width:100%}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section id="loginView" class="login card">
+    <h2>Teacher Sign In</h2><p>SR Lumapas Attendance</p>
+    <form id="loginForm">
+      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+      <button id="loginBtn" class="btn btn-primary full" type="submit">Sign In</button>
+      <button id="forgotBtn" class="btn btn-light full" type="button" style="margin-top:8px">Forgot password?</button>
+      <button id="openSignupBtn" class="btn btn-light full" type="button" style="margin-top:8px">Teacher Sign Up</button>
+      <div id="loginMsg" class="msg" aria-live="polite"></div>
+    </form>
+  </section>
+
+
+  <section id="signupView" class="login card hidden">
+    <h2>Teacher Sign Up</h2>
+    <p>Create your Attendance account. Access stays locked until an administrator approves your class.</p>
+    <form id="signupForm">
+      <div class="field"><label for="signupName">Full name</label><input id="signupName" maxlength="120" autocomplete="name" required></div>
+      <div class="field"><label for="signupEmail">Email</label><input id="signupEmail" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="signupPassword">Password</label><input id="signupPassword" type="password" minlength="8" autocomplete="new-password" required></div>
+      <div class="field"><label for="signupClass">Class</label><select id="signupClass" required></select></div>
+      <div class="field"><label for="signupRole">Role</label><select id="signupRole"><option value="class_teacher">Class Teacher</option><option value="assistant_teacher">Assistant Teacher</option></select></div>
+      <button id="signupBtn" class="btn btn-primary full" type="submit">Create Account</button>
+      <button id="backToLoginBtn" class="btn btn-light full" type="button" style="margin-top:8px">Back to Sign In</button>
+      <div id="signupMsg" class="msg" aria-live="polite"></div>
+      <p class="signup-note">After email verification, your request will be sent for admin approval. Until approval, pupil and attendance data remain inaccessible.</p>
+    </form>
+  </section>
+
+  <section id="teacherGateView" class="gate card hidden">
+    <h2 id="gateTitle">Teacher Access</h2>
+    <p id="gateIntro">Your account is signed in, but Attendance access has not been approved yet.</p>
+    <div id="gateStatus" class="gate-status"></div>
+    <form id="gateRequestForm" class="hidden">
+      <div class="field"><label for="gateName">Full name</label><input id="gateName" maxlength="120" required></div>
+      <div class="field"><label for="gateClass">Requested class</label><select id="gateClass" required></select></div>
+      <div class="field"><label for="gateRole">Role</label><select id="gateRole"><option value="class_teacher">Class Teacher</option><option value="assistant_teacher">Assistant Teacher</option></select></div>
+      <button id="gateSubmitBtn" class="btn btn-primary full" type="submit">Submit Approval Request</button>
+    </form>
+    <button id="checkApprovalBtn" class="btn btn-primary full" type="button" style="margin-top:8px">Check Approval</button>
+    <button id="gateSignOutBtn" class="btn btn-light full" type="button" style="margin-top:8px">Sign out</button>
+    <div id="gateMsg" class="msg" aria-live="polite"></div>
+  </section>
+
+  <section id="recoveryView" class="login card hidden">
+    <h2>Set New Password</h2>
+    <p>Enter a new password for your Attendance teacher account.</p>
+    <form id="recoveryForm">
+      <div class="field"><label for="newPassword">New password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="8" required></div>
+      <div class="field"><label for="confirmPassword">Confirm password</label><input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></div>
+      <button id="recoveryBtn" class="btn btn-primary full" type="submit">Update Password</button>
+      <div id="recoveryMsg" class="msg" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <section id="appView" class="hidden">
+    <div class="top">
+      <div class="brand"><h1>Daily Attendance</h1><p id="userLine">SR Lumapas</p><span id="rolePill" class="role-pill hidden"></span></div>
+      <button id="signOutBtn" class="btn btn-light" type="button">Sign out</button>
+    </div>
+
+    <nav id="mainNav" class="nav-tabs">
+      <button id="attendanceTabBtn" class="nav-btn active" type="button">Attendance</button>
+      <button id="dashboardTabBtn" class="nav-btn hidden" type="button">Dashboard</button>
+      <button id="statisticsTabBtn" class="nav-btn" type="button">Statistics</button>
+      <button id="reportsTabBtn" class="nav-btn" type="button">Reports</button>
+      <button id="studentsTabBtn" class="nav-btn hidden" type="button">Students</button>
+      <button id="teachersTabBtn" class="nav-btn hidden" type="button">Teachers</button>
+    </nav>
+
+    <section id="dashboardPanel" class="hidden">
+      <div class="card">
+        <div class="section-head"><h2>School Attendance Dashboard</h2><span id="dashboardMonthLabel" class="count"></span></div>
+        <p class="subtle">Admin-only, read-only overview of Main Attendance. CCA attendance is kept separate.</p>
+        <div class="controls">
+          <div class="field"><label for="dashboardMonth">Month</label><input id="dashboardMonth" type="month"></div>
+          <div class="field"><label>Scope</label><input value="All 15 classes" disabled></div>
+        </div>
+        <button id="refreshDashboardBtn" class="btn btn-light full" type="button">Refresh Dashboard</button>
+        <div id="dashboardBanner" class="banner info">Choose a month to view the school overview.</div>
+      </div>
+
+      <div class="stats-report-grid">
+        <div class="report-metric"><span>Cumulative attendance</span><strong id="dashboardCumulative">—</strong></div>
+        <div class="report-metric"><span>Average attendance</span><strong id="dashboardAverage">—</strong><small>ratio</small></div>
+        <div class="report-metric"><span>Attendance</span><strong id="dashboardPercent">—</strong><small>percent</small></div>
+        <div class="report-metric"><span>Completed registers</span><strong id="dashboardRegisters">—</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Latest School Day</h2><span id="dashboardLatestDate" class="count"></span></div>
+        <div class="gender-grid">
+          <div class="gender-metric"><span>Classes completed</span><strong id="dashboardLatestCompleted">—</strong></div>
+          <div class="gender-metric"><span>Classes missing</span><strong id="dashboardLatestMissing">—</strong></div>
+          <div class="gender-metric"><span>Total classes</span><strong id="dashboardClassCount">—</strong></div>
+          <div class="gender-metric"><span>Gender incomplete</span><strong id="dashboardGenderIncomplete">—</strong></div>
+        </div>
+        <div class="table-wrap" style="margin-top:10px">
+          <table class="stats-table dashboard-table">
+            <thead><tr><th>Class</th><th>Status</th><th>Attendance</th><th>Pupils</th></tr></thead>
+            <tbody id="dashboardLatestBody"><tr><td colspan="4" class="empty-cell">Load the dashboard to view class submission status.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Monthly Class Summary</h2><span class="count">Completed registers only</span></div>
+        <div class="table-wrap">
+          <table class="stats-table dashboard-table">
+            <thead><tr><th>Class</th><th>Pupils</th><th>Registers</th><th>Cumulative</th><th>Average</th><th>Attendance %</th><th></th></tr></thead>
+            <tbody id="dashboardClassBody"><tr><td colspan="7" class="empty-cell">Load the dashboard to view class summaries.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="attendancePanel">
+    <div class="card">
+      <div class="controls">
+        <div class="field"><label for="classSelect">Class</label><select id="classSelect"></select></div>
+        <div class="field"><label for="dateInput">Date</label><div class="date-row"><input id="dateInput" type="date"><button id="todayBtn" class="btn btn-light today-btn" type="button">Today</button></div></div>
+      </div>
+      <div id="schoolScope" class="school-scope"></div>
+      <div id="dateBanner" class="banner info">Choose a class and date.</div>
+      <div class="actions">
+        <button id="allPresentBtn" class="btn btn-primary" type="button">✓ Mark All Present</button>
+        <button id="reloadBtn" class="btn btn-light" type="button">↻ Reload Saved</button>
+        <button id="clearBtn" class="btn btn-danger" type="button">Clear</button>
+      </div>
+      <div id="correctionBox" class="correction-box hidden">
+        <strong>Correcting saved attendance</strong>
+        <p id="correctionText">A saved attendance record has been changed. Give a short reason so the correction is preserved in the audit history.</p>
+        <textarea id="correctionReason" maxlength="500" placeholder="Example: Wrong pupil selected, or parent provided updated information."></textarea>
+        <div id="correctionMeta" class="correction-meta"></div>
+      </div>
+    </div>
+
+    <div class="stats" aria-live="polite">
+      <div class="stat"><strong id="presentCount">0</strong><span>Present</span></div>
+      <div class="stat"><strong id="absentCount">0</strong><span>Absent</span></div>
+      <div class="stat"><strong id="lateCount">0</strong><span>Late</span></div>
+      <div class="stat"><strong id="permissionCount">0</strong><span>Permission</span></div>
+      <div class="stat"><strong id="otherCount">0</strong><span>Other</span></div>
+      <div class="stat"><strong id="recordedCount">0/0</strong><span>Recorded</span></div>
+    </div>
+
+    <div class="section-head"><h2>Students</h2><span id="rosterMeta" class="count"></span></div>
+    <div id="studentList"></div>
+
+    <div class="savebar">
+      <div class="savebox">
+        <div class="summary"><strong id="saveTitle">Attendance not ready</strong><span id="saveHint">Load a school day to begin.</span></div>
+        <button id="saveBtn" class="btn btn-primary" type="button" disabled>Save Attendance</button>
+      </div>
+    </div>
+    </section>
+
+    <section id="statisticsPanel" class="hidden">
+      <div class="card">
+        <div class="section-head"><h2>Main Attendance Statistics</h2><span id="statsMonthLabel" class="count"></span></div>
+        <p class="subtle">Read-only monthly statistics. CCA attendance is not included.</p>
+        <div class="controls">
+          <div class="field"><label for="statsClassSelect">Class</label><select id="statsClassSelect"></select></div>
+          <div class="field"><label for="statsMonth">Month</label><input id="statsMonth" type="month"></div>
+        </div>
+        <button id="refreshStatsBtn" class="btn btn-light full" type="button">Refresh Statistics</button>
+        <div id="statsBanner" class="banner info">Choose a class and month.</div>
+      </div>
+
+      <div class="stats-report-grid">
+        <div class="report-metric"><span>Cumulative attendance</span><strong id="statsCumulative">—</strong></div>
+        <div class="report-metric"><span>Average attendance</span><strong id="statsAverage">—</strong><small>ratio</small></div>
+        <div class="report-metric"><span>Attendance</span><strong id="statsPercent">—</strong><small>percent</small></div>
+        <div class="report-metric"><span>School days used</span><strong id="statsSchoolDays">—</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Monthly Cumulative</h2><span id="statsRoster" class="count"></span></div>
+        <div class="gender-grid">
+          <div class="gender-metric"><span>Male</span><strong id="statsMale">—</strong></div>
+          <div class="gender-metric"><span>Female</span><strong id="statsFemale">—</strong></div>
+          <div class="gender-metric"><span>All pupils</span><strong id="statsAll">—</strong></div>
+          <div class="gender-metric"><span>Possible attendance</span><strong id="statsPossible">—</strong></div>
+        </div>
+        <div id="genderStatsBanner" class="banner info hidden"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Daily Attendance</h2><span class="count">Daily + running cumulative</span></div>
+        <div class="table-wrap">
+          <table class="stats-table">
+            <thead><tr><th>Date</th><th>Male</th><th>Female</th><th>Total</th><th>Cum. M</th><th>Cum. F</th><th>Cum. Total</th></tr></thead>
+            <tbody id="statsDailyBody"><tr><td colspan="7" class="empty-cell">Load statistics to view daily figures.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="reportsPanel" class="hidden">
+      <div class="card">
+        <div class="section-head"><h2>Term & YTD Reports</h2><span id="reportPeriodLabel" class="count"></span></div>
+        <p class="subtle">Read-only Main Attendance reporting. CCA attendance is excluded.</p>
+        <div class="controls">
+          <div class="field"><label for="reportClassSelect">Class</label><select id="reportClassSelect"></select></div>
+          <div class="field"><label for="reportType">Report</label>
+            <select id="reportType"><option value="term">Term</option><option value="ytd">Year to Date (YTD)</option></select>
+          </div>
+          <div id="reportTermField" class="field"><label for="reportTermSelect">Term</label><select id="reportTermSelect"></select></div>
+          <div id="reportAsOfField" class="field hidden"><label for="reportAsOf">YTD as of</label><input id="reportAsOf" type="date"></div>
+        </div>
+        <div class="two-actions">
+          <button id="loadReportBtn" class="btn btn-primary" type="button">Load Report</button>
+          <button id="exportReportBtn" class="btn btn-light" type="button" disabled>Export CSV</button>
+        </div>
+        <div id="reportBanner" class="banner info">Choose a class and reporting period.</div>
+      </div>
+
+      <div class="stats-report-grid">
+        <div class="report-metric"><span>Cumulative attendance</span><strong id="reportCumulative">—</strong></div>
+        <div class="report-metric"><span>Average attendance</span><strong id="reportAverage">—</strong><small>ratio</small></div>
+        <div class="report-metric"><span>Attendance</span><strong id="reportPercent">—</strong><small>percent</small></div>
+        <div class="report-metric"><span>Completed registers</span><strong id="reportRegisters">—</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Period Summary</h2><span id="reportRoster" class="count"></span></div>
+        <div class="gender-grid">
+          <div class="gender-metric"><span>Male cumulative</span><strong id="reportMale">—</strong></div>
+          <div class="gender-metric"><span>Female cumulative</span><strong id="reportFemale">—</strong></div>
+          <div class="gender-metric"><span>Possible attendance</span><strong id="reportPossible">—</strong></div>
+          <div class="gender-metric"><span>School days used</span><strong id="reportSchoolDays">—</strong></div>
+        </div>
+        <div id="reportGenderBanner" class="banner info hidden"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Monthly Breakdown</h2><span class="count">Within selected period</span></div>
+        <div class="table-wrap">
+          <table class="stats-table">
+            <thead><tr><th>Month</th><th>Registers</th><th>Cumulative</th><th>Average</th><th>Attendance %</th></tr></thead>
+            <tbody id="reportMonthlyBody"><tr><td colspan="5" class="empty-cell">Load a report to view monthly figures.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Daily Breakdown</h2><span class="count">Export includes these rows</span></div>
+        <div class="table-wrap">
+          <table class="stats-table">
+            <thead><tr><th>Date</th><th>Status</th><th>Male</th><th>Female</th><th>Total</th><th>Cum. Total</th></tr></thead>
+            <tbody id="reportDailyBody"><tr><td colspan="6" class="empty-cell">Load a report to view daily figures.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="studentsPanel" class="hidden">
+      <div class="card">
+        <div class="section-head"><h2>Admin Student Management</h2><span id="studentAdminCount" class="count"></span></div>
+        <p class="subtle">Transfer pupils without deleting their identity or historical attendance.</p>
+        <div class="toolbar">
+          <div class="field"><label for="studentSearch">Search pupil</label><input id="studentSearch" placeholder="Name or Student ID"></div>
+          <div class="field"><label for="studentClassFilter">Class</label><select id="studentClassFilter"><option value="">All classes</option></select></div>
+          <button id="transferInBtn" class="btn btn-primary" type="button">+ Transfer In</button>
+        </div>
+        <div id="studentManageMsg" class="banner info hidden"></div>
+      </div>
+      <div id="adminStudentList"></div>
+      <div class="card">
+        <div class="section-head"><h2>Recent movements</h2><button id="refreshStudentsBtn" class="btn btn-light" type="button">Refresh</button></div>
+        <div id="movementList"></div>
+      </div>
+    </section>
+
+    <section id="teachersPanel" class="hidden">
+      <div class="card">
+        <div class="section-head"><h2>Teacher Access</h2><button id="refreshTeachersBtn" class="btn btn-light" type="button">Refresh</button></div>
+        <p class="subtle">Approve sign-up requests and control Attendance access. This does not disable a teacher's Science account.</p>
+        <div class="admin-grid">
+          <div class="admin-metric"><strong id="pendingTeacherCount">0</strong><span>Pending requests</span></div>
+          <div class="admin-metric"><strong id="activeTeacherCount">0</strong><span>Active teachers</span></div>
+          <div class="admin-metric"><strong id="inactiveTeacherCount">0</strong><span>Disabled teachers</span></div>
+        </div>
+        <div id="teacherAdminMsg" class="banner info hidden"></div>
+      </div>
+      <div class="section-head"><h2>Pending Approval</h2><span class="count">Review before granting pupil access</span></div>
+      <div id="teacherRequestList"></div>
+      <div class="section-head"><h2>Approved Teachers</h2></div>
+      <div id="teacherList"></div>
+    </section>
+  </section>
+
+  <dialog id="transferInDialog"><form id="transferInForm" class="dialog-card" method="dialog">
+    <h3>Transfer In</h3><p>Add a pupil from their official start date. Existing pupils with the same Student ID are reused rather than duplicated.</p>
+    <div class="field"><label for="tiRef">Student ID / Reference</label><input id="tiRef" maxlength="120" required></div>
+    <div class="field"><label for="tiName">Full name</label><input id="tiName" maxlength="220" required></div>
+    <div class="field"><label for="tiGender">Gender</label><select id="tiGender"><option value="">Not set</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+    <div class="field"><label for="tiClass">Class</label><select id="tiClass" required></select></div>
+    <div class="field"><label for="tiDate">Official start date</label><input id="tiDate" type="date" required></div>
+    <div class="field"><label for="tiGroup">Reporting group</label><select id="tiGroup"><option value="Mainstream">Mainstream</option><option value="SEN / UPK / PRAVOC">SEN / UPK / PRAVOC</option></select></div>
+    <div class="field"><label><input id="tiStats" type="checkbox" checked> Include in main class statistics</label></div>
+    <div class="field"><label for="tiRemarks">Remarks (optional)</label><textarea id="tiRemarks" maxlength="500"></textarea></div>
+    <div class="dialog-actions"><button class="btn btn-light" value="cancel" type="button" data-close="transferInDialog">Cancel</button><button id="tiSaveBtn" class="btn btn-primary" type="submit">Save Transfer In</button></div>
+    <div id="tiMsg" class="msg"></div>
+  </form></dialog>
+
+  <dialog id="transferOutDialog"><form id="transferOutForm" class="dialog-card" method="dialog">
+    <h3>Transfer Out</h3><p id="toStudentLabel"></p>
+    <div class="field"><label for="toDate">Last day at school</label><input id="toDate" type="date" required></div>
+    <div class="field"><label for="toRemarks">Remarks (optional)</label><textarea id="toRemarks" maxlength="500"></textarea></div>
+    <div class="dialog-actions"><button class="btn btn-light" type="button" data-close="transferOutDialog">Cancel</button><button id="toSaveBtn" class="btn btn-danger" type="submit">Confirm Transfer Out</button></div>
+    <div id="toMsg" class="msg"></div>
+  </form></dialog>
+
+  <dialog id="moveClassDialog"><form id="moveClassForm" class="dialog-card" method="dialog">
+    <h3>Move Class</h3><p id="mcStudentLabel"></p>
+    <div class="field"><label for="mcClass">Destination class</label><select id="mcClass" required></select></div>
+    <div class="field"><label for="mcDate">First day in new class</label><input id="mcDate" type="date" required></div>
+    <div class="field"><label for="mcRemarks">Remarks (optional)</label><textarea id="mcRemarks" maxlength="500"></textarea></div>
+    <div class="dialog-actions"><button class="btn btn-light" type="button" data-close="moveClassDialog">Cancel</button><button id="mcSaveBtn" class="btn btn-primary" type="submit">Confirm Move</button></div>
+    <div id="mcMsg" class="msg"></div>
+  </form></dialog>
+</main>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';
+
+const sb=createClient(
+  'https://rojetehazryfpcxlwtbi.supabase.co',
+  'sb_publishable_gc1-vVGBZOSgw32SCJumyw__vm0e3Jd',
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
+);
+const $=id=>document.getElementById(id);
+const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};
+const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
+const routineOptions=[
+  ['present','Present'],['absent','Absent'],['late','Late'],['permission','Permission'],
+  ['SS','SEN / Special'],['T','Transfer Out'],['D','Deferred'],['X','Deceased'],
+  ['SP','Student Pass'],['W','Withdrawn'],['Q','Quit']
+];
+
+function bruneiToday(){
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Brunei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const o={}; parts.forEach(p=>o[p.type]=p.value); return o.year+'-'+o.month+'-'+o.day;
+}
+function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function displayDate(s){
+  if(!s)return'';
+  const [y,m,d]=s.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})
+    .format(new Date(Date.UTC(y,m-1,d)));
+}
+function groupFromCode(code){
+  if(!code)return'';
+  if(code==='P'||code==='PP')return'present';
+  if(code==='A'||code==='TM')return'absent';
+  if(code==='L')return'late';
+  if(code==='PM')return'permission';
+  return code;
+}
+function cardClass(group){
+  return group==='present'?'status-present':group==='absent'?'status-absent':
+    group==='late'?'status-late':group==='permission'?'status-permission':
+    group?'status-other':'status-empty';
+}
+function reasonForLoaded(code,reason){if(code==='TM')return'NONE';return reason||(code==='A'?'NONE':'');}
+function statusCodeForRow(r){
+  if(r.group==='present')return(!r.dirty&&(r.originalCode==='P'||r.originalCode==='PP'))?r.originalCode:'P';
+  if(r.group==='absent'){
+    if(!r.dirty&&(r.originalCode==='A'||r.originalCode==='TM'))return r.originalCode;
+    return r.reason==='NONE'?'TM':'A';
+  }
+  if(r.group==='late')return'L';
+  if(r.group==='permission')return'PM';
+  return r.group||null;
+}
+function reasonCodeForRow(r){
+  if(r.group!=='absent')return null;
+  if(!r.dirty)return r.originalReasonCode;
+  return r.reason||null;
+}
+function normalizedNote(v){return (v||'').trim()||null;}
+function rowChanged(r){
+  if(!state.register?.register)return false;
+  return statusCodeForRow(r)!==(r.originalCode||null)
+    || reasonCodeForRow(r)!==(r.originalReasonCode||null)
+    || normalizedNote(r.note)!==normalizedNote(r.originalNote);
+}
+function changedRows(){return state.rows.filter(rowChanged);}
+function hasUnsavedChanges(){
+  if(state.saving||state.loading)return false;
+  if(state.register?.register)return changedRows().length>0;
+  return state.rows.some(r=>!!r.group || !!r.reason || normalizedNote(r.note)!==null);
+}
+function confirmDiscard(){
+  return !hasUnsavedChanges() || confirm('You have unsaved attendance changes. Discard them and continue?');
+}
+
+
+function fillGroupedClasses(select,classes,{blankLabel=null,excludeId=null,compact=false}={}){
+  select.innerHTML='';
+  if(blankLabel!==null){const o=document.createElement('option');o.value='';o.textContent=blankLabel;select.appendChild(o);}
+  const groups=new Map();
+  (classes||[]).filter(c=>c.id!==excludeId).forEach(c=>{const y=c.year_level||0;if(!groups.has(y))groups.set(y,[]);groups.get(y).push(c);});
+  [...groups.keys()].sort((a,b)=>a-b).forEach(y=>{
+    const g=document.createElement('optgroup');g.label=y===0?'Prasekolah':'Year '+y;
+    groups.get(y).sort((a,b)=>a.class_code.localeCompare(b.class_code)).forEach(c=>{
+      const o=document.createElement('option');o.value=c.id;
+      o.textContent=compact?(y===0?c.class_code.replace('PRA ','Pra '):c.class_code):(c.class_code+' — '+c.class_name);
+      g.appendChild(o);
+    });select.appendChild(g);
+  });
+}
+async function getSignupClasses(){
+  const {data,error}=await sb.rpc('attendance_signup_options');
+  if(error)throw error;
+  const school=(data?.schools||[])[0];
+  return {school,classes:school?.classes||[]};
+}
+async function submitTeacherRequest(name,classId,role){
+  const {data,error}=await sb.rpc('attendance_submit_teacher_request',{p_full_name:name,p_requested_class_id:classId,p_requested_role:role});
+  if(error)throw error;return data;
+}
+
+function setBusy(flag){
+  state.loading=flag;
+  $('allPresentBtn').disabled=flag;$('reloadBtn').disabled=flag;$('clearBtn').disabled=flag;
+}
+function setBanner(text,type='info'){const b=$('dateBanner');b.className='banner '+type;b.textContent=text;}
+
+async function init(){
+  $('dateInput').value=bruneiToday();
+  sb.auth.onAuthStateChange(async (event,session)=>{
+    if(event==='PASSWORD_RECOVERY'){showRecovery();return;}
+    if(event==='SIGNED_OUT'){showLogin();return;}
+  });
+  const {data:{session}}=await sb.auth.getSession();
+  if(session)await enterApp(); else showLogin();
+}
+function hideEntryViews(){
+  ['loginView','signupView','teacherGateView','recoveryView','appView'].forEach(id=>$(id).classList.add('hidden'));
+}
+function showLogin(){hideEntryViews();$('loginView').classList.remove('hidden');}
+async function showSignup(){
+  hideEntryViews();$('signupView').classList.remove('hidden');$('signupMsg').textContent='';
+  try{const {classes}=await getSignupClasses();fillGroupedClasses($('signupClass'),classes,{compact:true});}
+  catch(e){$('signupMsg').textContent='Could not load classes: '+e.message;}
+}
+function showRecovery(){hideEntryViews();$('recoveryView').classList.remove('hidden');}
+async function showTeacherGate(status){
+  hideEntryViews();$('teacherGateView').classList.remove('hidden');state.teacherStatus=status;
+  const req=status?.signup_request;
+  $('gateMsg').textContent='';$('gateRequestForm').classList.add('hidden');
+  $('gateTitle').textContent='Teacher Access';
+  if(req?.status==='pending'){
+    $('gateStatus').innerHTML='<strong>Pending admin approval</strong><br>'+esc(req.full_name)+' · '+esc(req.requested_class_code)+' · '+(req.requested_role==='assistant_teacher'?'Assistant Teacher':'Class Teacher')+'.';
+  }else if(req?.status==='rejected'){
+    $('gateStatus').innerHTML='<strong>Request not approved</strong><br>'+(req.admin_note?esc(req.admin_note):'You may submit a corrected request below.');
+    await prepareGateRequest(req);
+  }else{
+    $('gateStatus').innerHTML='<strong>No Attendance class access yet.</strong><br>Complete the request below for administrator approval.';
+    await prepareGateRequest(req);
+  }
+}
+async function prepareGateRequest(req){
+  try{
+    const {classes}=await getSignupClasses();fillGroupedClasses($('gateClass'),classes,{compact:true});
+    if(req?.requested_class_id)$('gateClass').value=req.requested_class_id;
+    $('gateName').value=req?.full_name||'';$('gateRole').value=req?.requested_role||'class_teacher';
+    const pending=JSON.parse(localStorage.getItem(PENDING_SIGNUP_KEY)||'null');
+    if(pending){
+      if(!$('gateName').value)$('gateName').value=pending.name||'';
+      if(pending.classId)$('gateClass').value=pending.classId;
+      if(pending.role)$('gateRole').value=pending.role;
+    }
+    $('gateRequestForm').classList.remove('hidden');
+  }catch(e){$('gateMsg').textContent=e.message;}
+}
+async function enterApp(){
+  let status;
+  const statusResp=await sb.rpc('attendance_teacher_status');
+  if(statusResp.error){showLogin();$('loginMsg').textContent='Could not check teacher access: '+statusResp.error.message;return;}
+  status=statusResp.data;state.teacherStatus=status;
+  if(!status.authorized){
+    const pending=JSON.parse(localStorage.getItem(PENDING_SIGNUP_KEY)||'null');
+    if(pending && !status.signup_request){
+      try{await submitTeacherRequest(pending.name,pending.classId,pending.role);localStorage.removeItem(PENDING_SIGNUP_KEY);
+        const fresh=await sb.rpc('attendance_teacher_status');if(!fresh.error)status=fresh.data;
+      }catch(e){}
+    }
+    await showTeacherGate(status);return;
+  }
+  localStorage.removeItem(PENDING_SIGNUP_KEY);
+  hideEntryViews();$('appView').classList.remove('hidden');
+  setBusy(true);setBanner('Loading teacher access…','info');
+  const boot=await sb.rpc('attendance_bootstrap');
+  if(boot.error){setBanner(boot.error.message,'warn');setBusy(false);return;}
+  const data=boot.data;state.bootstrap=data;
+  const user=data.user||{};const classes=data.classes||[];
+  $('userLine').textContent=user.email||'Teacher';
+  const role=user.school_role==='admin'?'Admin':'Teacher';
+  $('rolePill').textContent=user.all_classes?role+' · All Classes':role;$('rolePill').classList.remove('hidden');
+  $('schoolScope').textContent=user.all_classes?'School-wide access · '+classes.length+' classes':'Assigned classes · '+classes.length;
+  const isAdmin=user.school_role==='admin' || user.all_classes;
+  $('dashboardTabBtn').classList.toggle('hidden',!isAdmin);$('studentsTabBtn').classList.toggle('hidden',!isAdmin);$('teachersTabBtn').classList.toggle('hidden',!isAdmin);
+  $('dashboardMonth').value=bruneiToday().slice(0,7);
+  fillGroupedClasses($('classSelect'),classes,{compact:false});
+  fillGroupedClasses($('statsClassSelect'),classes,{compact:false});
+  fillGroupedClasses($('reportClassSelect'),classes,{compact:false});
+  $('statsMonth').value=bruneiToday().slice(0,7);$('reportAsOf').value=bruneiToday();
+  if(!classes.length){setBanner('No attendance class has been assigned to this account.','warn');setBusy(false);return;}
+  const saved=localStorage.getItem('srlAttendanceLastClass');
+  const preferred=classes.find(c=>c.id===saved)||classes.find(c=>c.class_code==='3A')||classes[0];$('classSelect').value=preferred.id;$('statsClassSelect').value=preferred.id;$('reportClassSelect').value=preferred.id;
+  setBusy(false);switchPanel('attendance');await loadRegister();
+}
+
+async function loadRegister(){
+  const classId=$('classSelect').value,date=$('dateInput').value;
+  if(!classId||!date)return;
+  setBusy(true);setBanner('Loading attendance…','info');$('studentList').innerHTML='';
+  const {data,error}=await sb.rpc('attendance_load_register',{p_class_id:classId,p_date:date});
+  setBusy(false);
+  if(error){state.register=null;state.rows=[];setBanner(error.message,'warn');render();return;}
+  state.register=data;
+  state.currentClassId=classId;
+  state.currentDate=date;
+  localStorage.setItem('srlAttendanceLastClass',classId);
+  state.rows=(data.students||[]).map(s=>({
+    ...s,originalCode:s.status_code||'',originalReasonCode:s.reason_code||null,originalNote:s.note||'',
+    group:groupFromCode(s.status_code),reason:reasonForLoaded(s.status_code,s.reason_code),
+    note:s.note||'',dirty:false
+  }));
+  $('correctionReason').value='';
+  if(!data.is_school_day)setBanner(displayDate(date)+' — No attendance required'+(data.calendar_label?': '+data.calendar_label:'')+'.','warn');
+  else if(data.register){
+    const cc=data.register.correction_count||0;
+    setBanner('Saved attendance loaded ('+data.register.status+'). Edit only what is wrong. '+(cc?('Previous corrections: '+cc+'. '):'')+'Any new correction requires a reason.','ok');
+  }
+  else setBanner(displayDate(date)+(data.term_name?' • '+data.term_name:'')+'. Tap “Mark All Present”, then change only the exceptions.','info');
+  render();
+}
+
+function render(){
+  const list=$('studentList');list.innerHTML='';
+  const total=state.rows.length,main=state.rows.filter(x=>x.include_in_class_stats).length,special=total-main;
+  $('rosterMeta').textContent=total
+    ? total+' pupils • '+main+' Main'+(special?' • '+special+' Special':'')
+    : '';
+
+  state.rows.forEach((row,i)=>{
+    const changed=rowChanged(row);
+    const el=document.createElement('article'); el.className='student '+cardClass(row.group)+(changed?' changed':'');
+    const opts=routineOptions.map(([v,l])=>'<option value="'+esc(v)+'" '+(row.group===v?'selected':'')+'>'+esc(l)+'</option>').join('');
+    const reasons=(state.bootstrap?.reasons||[]).map(x=>'<option value="'+esc(x.code)+'" '+(row.reason===x.code?'selected':'')+'>'+esc(x.label)+'</option>').join('');
+    const showReason=row.group==='absent';
+    const selectedReason=(state.bootstrap?.reasons||[]).find(x=>x.code===row.reason);
+    const showNote=showReason&&selectedReason?.requires_note;
+
+    el.innerHTML=
+      '<div class="student-top"><div class="num">'+(i+1)+'</div><div class="student-name">'+esc(row.full_name)+(changed?'<span class="change-badge">Changed</span>':'')+
+      '<div><span class="badge '+(row.include_in_class_stats?'':'special')+'">'+esc(row.reporting_group||'Mainstream')+'</span></div></div></div>'+
+      '<div class="student-grid"><div><span class="mini-label">Status</span><select class="status" data-i="'+i+'">'+
+      '<option value="" '+(!row.group?'selected':'')+'>Not recorded</option>'+opts+'</select></div>'+
+      '<div class="reason-wrap '+(showReason?'':'hidden')+'"><span class="mini-label">Absence reason</span><select class="reason" data-i="'+i+'">'+reasons+'</select></div>'+
+      '<div class="note-wrap '+(showNote?'':'hidden')+'"><span class="mini-label">Note required</span><textarea class="note" data-i="'+i+'" placeholder="Enter a short note">'+esc(row.note)+'</textarea></div></div>';
+
+    list.appendChild(el);
+  });
+
+  list.querySelectorAll('select.status').forEach(x=>x.addEventListener('change',onStatus));
+  list.querySelectorAll('select.reason').forEach(x=>x.addEventListener('change',onReason));
+  list.querySelectorAll('textarea.note').forEach(x=>x.addEventListener('input',onNote));
+  updateSummary();
+}
+
+function onStatus(e){
+  const r=state.rows[+e.target.dataset.i];r.group=e.target.value;r.dirty=true;
+  if(r.group==='absent'&&!r.reason)r.reason='NONE';
+  if(r.group!=='absent'){r.reason='';r.note='';}
+  render();
+}
+function onReason(e){const r=state.rows[+e.target.dataset.i];r.reason=e.target.value;r.dirty=true;render();}
+function onNote(e){const r=state.rows[+e.target.dataset.i];r.note=e.target.value;r.dirty=true;updateSummary();}
+function markAllPresent(){
+  if(state.register?.register&&!confirm('This date already has saved attendance. Mark every pupil Present in the form? Any changed pupil will become a formal correction and will require a reason before saving.'))return;
+  state.rows.forEach(r=>{r.group='present';r.reason='';r.note='';r.dirty=true;});render();
+}
+function clearAll(){state.rows.forEach(r=>{r.group='';r.reason='';r.note='';r.dirty=true;});render();}
+
+function updateSummary(){
+  const groups=state.rows.map(r=>r.group),n=v=>groups.filter(x=>x===v).length;
+  $('presentCount').textContent=n('present');$('absentCount').textContent=n('absent');$('lateCount').textContent=n('late');$('permissionCount').textContent=n('permission');
+  const routine=['present','absent','late','permission',''];
+  $('otherCount').textContent=groups.filter(x=>x&&!routine.includes(x)).length;
+  const recorded=groups.filter(Boolean).length;$('recordedCount').textContent=recorded+'/'+state.rows.length;
+
+  let reasonOk=true;
+  state.rows.forEach(r=>{
+    if(r.group==='absent'){
+      if(!r.reason)reasonOk=false;
+      const def=(state.bootstrap?.reasons||[]).find(x=>x.code===r.reason);
+      if(def?.requires_note&&!r.note.trim())reasonOk=false;
+    }
+  });
+
+  const changes=changedRows();
+  const isCorrection=!!state.register?.register && changes.length>0;
+  const correctionReason=$('correctionReason').value.trim();
+  $('correctionBox').classList.toggle('hidden',!isCorrection);
+  $('correctionMeta').textContent=isCorrection
+    ? changes.length+' pupil record'+(changes.length===1?'':'s')+' will be corrected.'
+    : '';
+
+  const complete=!!state.register?.is_school_day&&state.rows.length>0&&recorded===state.rows.length&&reasonOk;
+  const correctionReady=!isCorrection || correctionReason.length>0;
+  const hasSomethingToSave=!state.register?.register || changes.length>0;
+  const ready=complete&&correctionReady&&hasSomethingToSave&&!state.saving;
+
+  $('saveBtn').disabled=!ready;
+  $('saveBtn').textContent=state.saving?'Saving…':(isCorrection?'Save Correction':(state.register?.register?'No Changes':'Save Attendance'));
+
+  if(!state.register?.is_school_day){
+    $('saveTitle').textContent='No attendance required';
+    $('saveHint').textContent='Attendance cannot be saved for this date.';
+  }else if(recorded!==state.rows.length){
+    $('saveTitle').textContent=(state.rows.length-recorded)+' pupil'+(state.rows.length-recorded===1?'':'s')+' not recorded';
+    $('saveHint').textContent='Complete every pupil before saving.';
+  }else if(!reasonOk){
+    $('saveTitle').textContent='Attendance needs attention';
+    $('saveHint').textContent='Choose an absence reason and complete any required note.';
+  }else if(state.register?.register && changes.length===0){
+    $('saveTitle').textContent='Saved attendance unchanged';
+    $('saveHint').textContent='Change a pupil only if the saved attendance is incorrect.';
+  }else if(isCorrection && !correctionReason){
+    $('saveTitle').textContent='Correction reason required';
+    $('saveHint').textContent=changes.length+' changed pupil record'+(changes.length===1?' needs ':'s need ')+'a short correction reason.';
+  }else if(isCorrection){
+    $('saveTitle').textContent='Correction ready';
+    $('saveHint').textContent=changes.length+' pupil record'+(changes.length===1?'':'s')+' will be changed and added to the audit history.';
+  }else{
+    $('saveTitle').textContent='Ready to save';
+    $('saveHint').textContent=recorded+' of '+state.rows.length+' pupils recorded.';
+  }
+}
+
+async function save(){
+  if($('saveBtn').disabled)return;
+  const changes=changedRows();
+  const isCorrection=!!state.register?.register&&changes.length>0;
+  const correctionReason=$('correctionReason').value.trim();
+
+  if(isCorrection){
+    const names=changes.slice(0,3).map(r=>r.full_name).join(', ');
+    const more=changes.length>3?' and '+(changes.length-3)+' more':'';
+    if(!confirm(`Save attendance correction for ${displayDate($('dateInput').value)}?
+
+Changed: ${names}${more}
+
+Reason: ${correctionReason}
+
+The original submission will remain in the audit history.`))return;
+  }
+
+  state.saving=true;updateSummary();
+  const payload=state.rows.map(r=>({
+    enrolment_id:r.enrolment_id,status_code:statusCodeForRow(r),
+    reason_code:reasonCodeForRow(r),note:r.note?.trim()||null
+  }));
+  const {data,error}=await sb.rpc('attendance_save_register',{
+    p_class_id:$('classSelect').value,
+    p_date:$('dateInput').value,
+    p_records:payload,
+    p_correction_reason:isCorrection?correctionReason:null
+  });
+  state.saving=false;
+  if(error){setBanner('Save failed: '+error.message,'warn');updateSummary();return;}
+
+  if(data.no_changes){
+    setBanner('No changes were made to the saved attendance.','info');
+  }else if(data.correction){
+    setBanner('✓ Correction saved — '+data.changed_records+' pupil record'+(data.changed_records===1?'':'s')+' changed. The correction reason was added to the audit history.','ok');
+  }else{
+    setBanner('✓ Attendance saved successfully — '+data.recorded+' pupils recorded.','ok');
+  }
+  await loadRegister();
+}
+
+
+function switchPanel(name){
+  const map={attendance:'attendancePanel',dashboard:'dashboardPanel',statistics:'statisticsPanel',reports:'reportsPanel',students:'studentsPanel',teachers:'teachersPanel'};
+  Object.entries(map).forEach(([k,id])=>$(id).classList.toggle('hidden',k!==name));
+  ['attendance','dashboard','statistics','reports','students','teachers'].forEach(k=>$(k+'TabBtn').classList.toggle('active',k===name));
+  if(name==='dashboard')loadAdminDashboard();
+  if(name==='statistics'){if(!$('statsClassSelect').value)$('statsClassSelect').value=$('classSelect').value;loadMonthlyStats();}
+  if(name==='reports'){if(!$('reportClassSelect').value)$('reportClassSelect').value=$('classSelect').value;loadReportOptions();}
+  if(name==='students')loadAdminStudents();if(name==='teachers')loadAdminTeachers();
+}
+function formatMonthLabel(v){if(!v)return'';const [y,m]=v.split('-').map(Number);return new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,1)));}
+function shortDay(v){if(!v)return'';const [y,m,d]=v.split('-').map(Number);return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,d)));}
+function setStatsBanner(text,type='info'){const el=$('statsBanner');el.textContent=text;el.className='banner '+type;}
+async function loadMonthlyStats(){
+  const classId=$('statsClassSelect').value,month=$('statsMonth').value;if(!classId||!month)return;
+  $('refreshStatsBtn').disabled=true;setStatsBanner('Loading monthly statistics…','info');
+  const {data,error}=await sb.rpc('attendance_monthly_class_stats',{p_class_id:classId,p_month:month+'-01'});
+  $('refreshStatsBtn').disabled=false;
+  if(error){state.monthlyStats=null;setStatsBanner(error.message,'warn');renderMonthlyStats();return;}
+  state.monthlyStats=data;renderMonthlyStats();
+}
+function renderMonthlyStats(){
+  const data=state.monthlyStats,s=data?.summary||{},r=data?.roster||{};
+  $('statsMonthLabel').textContent=data?formatMonthLabel(data.month):'';
+  $('statsCumulative').textContent=data?s.cumulative_total:'—';
+  $('statsAverage').textContent=data&&s.average_attendance!=null?Number(s.average_attendance).toFixed(4):'—';
+  $('statsPercent').textContent=data&&s.attendance_percentage!=null?Number(s.attendance_percentage).toFixed(2)+'%':'—';
+  $('statsSchoolDays').textContent=data?(s.school_days+'/'+s.scheduled_school_days):'—';
+  $('statsMale').textContent=data?s.cumulative_male:'—';$('statsFemale').textContent=data?s.cumulative_female:'—';$('statsAll').textContent=data?s.cumulative_total:'—';$('statsPossible').textContent=data?s.possible_attendance:'—';
+  $('statsRoster').textContent=data?(r.pupils_seen_in_month+' pupils · '+r.male_pupils+' male · '+r.female_pupils+' female'):'';
+  const gb=$('genderStatsBanner');gb.classList.add('hidden');
+  if(data&&!r.gender_complete){gb.textContent='Gender is not recorded for '+r.gender_unknown_pupils+' pupil'+(r.gender_unknown_pupils===1?'':'s')+'. Male/female figures include known genders only; Total remains complete.';gb.className='banner warn';gb.classList.remove('hidden');}
+  if(data){
+    if(s.registers_missing>0)setStatsBanner('Provisional: '+s.registers_completed+' of '+s.scheduled_school_days+' elapsed school-day registers are complete. '+s.registers_missing+' register'+(s.registers_missing===1?' is':'s are')+' missing. Average and percentage use completed registers only.','warn');
+    else if(s.provisional)setStatsBanner('Provisional month-to-date statistics through '+displayDate(data.as_of_date)+'.','info');
+    else setStatsBanner('Complete monthly statistics · '+s.school_days+' school days · '+s.possible_attendance+' possible pupil-attendances.','ok');
+  }
+  const body=$('statsDailyBody');
+  if(!data){body.innerHTML='<tr><td colspan="7" class="empty-cell">Load statistics to view daily figures.</td></tr>';return;}
+  const rows=data.daily||[];if(!rows.length){body.innerHTML='<tr><td colspan="7" class="empty-cell">No school days are available for this month.</td></tr>';return;}
+  body.innerHTML=rows.map(d=>'<tr class="'+(d.register_exists?'':'missing-row')+'"><td>'+esc(shortDay(d.date))+(d.register_exists?'':' · Missing')+'</td><td>'+(d.register_exists?d.male_attendance:'—')+'</td><td>'+(d.register_exists?d.female_attendance:'—')+'</td><td>'+(d.register_exists?d.total_attendance:'—')+'</td><td>'+d.cumulative_male+'</td><td>'+d.cumulative_female+'</td><td>'+d.cumulative_total+'</td></tr>').join('');
+}
+function setDashboardBanner(text,type='info'){const el=$('dashboardBanner');el.textContent=text;el.className='banner '+type;}
+async function loadAdminDashboard(){
+  const sid=schoolId(),month=$('dashboardMonth').value;if(!sid||!month)return;
+  $('refreshDashboardBtn').disabled=true;setDashboardBanner('Loading school attendance dashboard…','info');
+  const {data,error}=await sb.rpc('attendance_admin_school_dashboard',{p_school_id:sid,p_month:month+'-01'});
+  $('refreshDashboardBtn').disabled=false;
+  if(error){state.adminDashboard=null;setDashboardBanner(error.message,'warn');renderAdminDashboard();return;}
+  state.adminDashboard=data;renderAdminDashboard();
+}
+function renderAdminDashboard(){
+  const data=state.adminDashboard,s=data?.summary||{},latest=data?.latest_school_day||{};
+  $('dashboardMonthLabel').textContent=data?formatMonthLabel(data.month):'';
+  $('dashboardCumulative').textContent=data?s.cumulative_total:'—';
+  $('dashboardAverage').textContent=data&&s.average_attendance!=null?Number(s.average_attendance).toFixed(4):'—';
+  $('dashboardPercent').textContent=data&&s.attendance_percentage!=null?Number(s.attendance_percentage).toFixed(2)+'%':'—';
+  $('dashboardRegisters').textContent=data?(s.registers_completed+'/'+(s.registers_completed+s.registers_missing)):'—';
+  $('dashboardLatestDate').textContent=latest.date?displayDate(latest.date):'No school day';
+  $('dashboardLatestCompleted').textContent=data?latest.classes_completed:'—';
+  $('dashboardLatestMissing').textContent=data?latest.classes_missing:'—';
+  $('dashboardClassCount').textContent=data?s.class_count:'—';
+  $('dashboardGenderIncomplete').textContent=data?s.gender_incomplete_classes:'—';
+  if(data){
+    if(s.registers_missing>0)setDashboardBanner('Provisional: '+s.registers_missing+' elapsed class register'+(s.registers_missing===1?' is':'s are')+' missing. School average and percentage use completed registers only. A missing register means no saved register was found — not zero attendance.','warn');
+    else if(s.provisional)setDashboardBanner('Provisional month-to-date school summary through '+displayDate(data.as_of_date)+'.','info');
+    else setDashboardBanner('Complete school summary for '+formatMonthLabel(data.month)+'.','ok');
+  }
+  const lb=$('dashboardLatestBody');
+  const latestRows=latest.classes||[];
+  if(!latestRows.length)lb.innerHTML='<tr><td colspan="4" class="empty-cell">No school-day status is available for this month.</td></tr>';
+  else lb.innerHTML=latestRows.map(r=>'<tr class="'+(r.register_exists?'':'missing-row')+'"><td>'+esc(r.class_code)+'</td><td><span class="dashboard-status '+(r.register_exists?'saved':'missing')+'">'+(r.register_exists?'Saved':'Missing')+'</span></td><td>'+(r.register_exists?r.attendance:'—')+'</td><td>'+r.eligible_students+'</td></tr>').join('');
+
+  const cb=$('dashboardClassBody'),rows=data?.classes||[];
+  if(!rows.length){cb.innerHTML='<tr><td colspan="7" class="empty-cell">No class summaries are available.</td></tr>';return;}
+  cb.innerHTML=rows.map(r=>{
+    const totalRegs=r.registers_completed+r.registers_missing;
+    return '<tr class="'+(r.registers_missing?'missing-row':'')+'"><td>'+esc(r.class_code)+'</td><td>'+r.pupils+'</td><td>'+r.registers_completed+'/'+totalRegs+'</td><td>'+r.cumulative_total+'</td><td>'+(r.average_attendance==null?'—':Number(r.average_attendance).toFixed(4))+'</td><td>'+(r.attendance_percentage==null?'—':Number(r.attendance_percentage).toFixed(2)+'%')+'</td><td><button class="btn btn-light dashboard-view" data-class="'+esc(r.class_id)+'">View</button></td></tr>';
+  }).join('');
+  cb.querySelectorAll('.dashboard-view').forEach(b=>b.addEventListener('click',()=>{
+    $('statsClassSelect').value=b.dataset.class;$('statsMonth').value=data.month;switchPanel('statistics');
+  }));
+}
+function setReportBanner(text,type='info'){const el=$('reportBanner');el.textContent=text;el.className='banner '+type;}
+function syncReportTypeUI(){
+  const term=$('reportType').value==='term';
+  $('reportTermField').classList.toggle('hidden',!term);
+  $('reportAsOfField').classList.toggle('hidden',term);
+}
+async function loadReportOptions(){
+  const classId=$('reportClassSelect').value;if(!classId)return;
+  state.periodReport=null;renderPeriodReport();
+  setReportBanner('Loading reporting periods…','info');
+  const {data,error}=await sb.rpc('attendance_class_report_options',{p_class_id:classId});
+  if(error){state.reportOptions=null;setReportBanner(error.message,'warn');return;}
+  state.reportOptions=data;
+  const terms=data?.terms||[],sel=$('reportTermSelect');
+  sel.innerHTML=terms.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.term_name)+' · '+displayDate(t.start_date)+'–'+displayDate(t.end_date)+'</option>').join('');
+  const today=bruneiToday(),current=terms.find(t=>today>=t.start_date&&today<=t.end_date)||terms[terms.length-1];
+  if(current)sel.value=current.id;
+  syncReportTypeUI();setReportBanner('Choose Term or YTD, then load the report.','info');
+}
+async function loadPeriodReport(){
+  const classId=$('reportClassSelect').value,type=$('reportType').value;
+  if(!classId)return;
+  if(!state.reportOptions||state.reportOptions.class?.id!==classId)await loadReportOptions();
+  const termId=type==='term'?$('reportTermSelect').value:null;
+  if(type==='term'&&!termId){setReportBanner('Choose a term.','warn');return;}
+  $('loadReportBtn').disabled=true;$('exportReportBtn').disabled=true;setReportBanner('Loading report…','info');
+  const args={p_class_id:classId,p_period_type:type,p_term_id:termId||null,p_as_of_date:type==='ytd'?$('reportAsOf').value:null};
+  const {data,error}=await sb.rpc('attendance_class_period_report',args);
+  $('loadReportBtn').disabled=false;
+  if(error){state.periodReport=null;setReportBanner(error.message,'warn');renderPeriodReport();return;}
+  state.periodReport=data;renderPeriodReport();$('exportReportBtn').disabled=false;
+}
+function renderPeriodReport(){
+  const data=state.periodReport,s=data?.summary||{},r=data?.roster||{},p=data?.period||{};
+  $('reportPeriodLabel').textContent=data?p.label:'';
+  $('reportCumulative').textContent=data?s.cumulative_total:'—';
+  $('reportAverage').textContent=data&&s.average_attendance!=null?Number(s.average_attendance).toFixed(4):'—';
+  $('reportPercent').textContent=data&&s.attendance_percentage!=null?Number(s.attendance_percentage).toFixed(2)+'%':'—';
+  $('reportRegisters').textContent=data?(s.registers_completed+'/'+(s.registers_completed+s.registers_missing)):'—';
+  $('reportMale').textContent=data?s.cumulative_male:'—';$('reportFemale').textContent=data?s.cumulative_female:'—';
+  $('reportPossible').textContent=data?s.possible_attendance:'—';$('reportSchoolDays').textContent=data?(s.school_days+'/'+s.scheduled_school_days):'—';
+  $('reportRoster').textContent=data?(r.pupils_seen+' pupils seen · '+r.male_pupils+' male · '+r.female_pupils+' female'):'';
+  const gb=$('reportGenderBanner');gb.classList.add('hidden');
+  if(data&&!r.gender_complete){gb.textContent='Gender is missing for '+r.gender_unknown_pupils+' pupil'+(r.gender_unknown_pupils===1?'':'s')+'. Total attendance remains complete; male/female figures include known genders only.';gb.className='banner warn';gb.classList.remove('hidden');}
+  if(data){
+    if(s.registers_missing>0)setReportBanner('Provisional: '+s.registers_missing+' elapsed register'+(s.registers_missing===1?' is':'s are')+' missing. Average and percentage use completed registers only.','warn');
+    else if(s.provisional)setReportBanner('Provisional report through '+displayDate(p.as_of_date)+'.','info');
+    else setReportBanner('Complete '+p.label+' report · '+s.school_days+' school days · '+s.possible_attendance+' possible pupil-attendances.','ok');
+  }
+  const mb=$('reportMonthlyBody'),months=data?.months||[];
+  mb.innerHTML=months.length?months.map(m=>'<tr class="'+(m.registers_missing?'missing-row':'')+'"><td>'+esc(formatMonthLabel(m.month))+'</td><td>'+m.registers_completed+'/'+(m.registers_completed+m.registers_missing)+'</td><td>'+m.cumulative_total+'</td><td>'+(m.average_attendance==null?'—':Number(m.average_attendance).toFixed(4))+'</td><td>'+(m.attendance_percentage==null?'—':Number(m.attendance_percentage).toFixed(2)+'%')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty-cell">Load a report to view monthly figures.</td></tr>';
+  const db=$('reportDailyBody'),days=data?.daily||[];
+  db.innerHTML=days.length?days.map(d=>'<tr class="'+(d.register_exists?'':'missing-row')+'"><td>'+esc(shortDay(d.date))+'</td><td><span class="dashboard-status '+(d.register_exists?'saved':'missing')+'">'+(d.register_exists?'Saved':'Missing')+'</span></td><td>'+(d.register_exists?d.male_attendance:'—')+'</td><td>'+(d.register_exists?d.female_attendance:'—')+'</td><td>'+(d.register_exists?d.total_attendance:'—')+'</td><td>'+d.cumulative_total+'</td></tr>').join(''):'<tr><td colspan="6" class="empty-cell">Load a report to view daily figures.</td></tr>';
+}
+function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function exportPeriodReport(){
+  const d=state.periodReport;if(!d)return;
+  const s=d.summary||{},p=d.period||{},c=d.class||{},r=d.roster||{};
+  const rows=[
+    ['SR Lumapas Main Attendance Report'],
+    ['Class',c.class_code,c.class_name],
+    ['Academic Year',c.year_no],
+    ['Period',p.label],
+    ['Start Date',p.start_date],['End Date',p.end_date],['As Of',p.as_of_date],
+    ['Cumulative Attendance',s.cumulative_total],['Possible Attendance',s.possible_attendance],
+    ['Average Attendance Ratio',s.average_attendance],['Attendance Percentage',s.attendance_percentage],
+    ['Male Cumulative',s.cumulative_male],['Female Cumulative',s.cumulative_female],
+    ['Completed Registers',s.registers_completed],['Missing Registers',s.registers_missing],
+    ['Pupils Seen',r.pupils_seen],['Gender Missing',r.gender_unknown_pupils],
+    [],
+    ['MONTHLY BREAKDOWN'],
+    ['Month','Completed Registers','Scheduled/Elapsed Registers','Cumulative Attendance','Possible Attendance','Average Attendance','Attendance %'],
+    ...(d.months||[]).map(m=>[m.month,m.registers_completed,m.scheduled_school_days,m.cumulative_total,m.possible_attendance,m.average_attendance,m.attendance_percentage]),
+    [],
+    ['DAILY BREAKDOWN'],
+    ['Date','Register Status','Eligible Pupils','Male Attendance','Female Attendance','Unknown Gender Attendance','Total Attendance','Cumulative Male','Cumulative Female','Cumulative Total'],
+    ...(d.daily||[]).map(x=>[x.date,x.register_exists?'Saved':'Missing',x.eligible_students,x.register_exists?x.male_attendance:'',x.register_exists?x.female_attendance:'',x.register_exists?x.unknown_gender_attendance:'',x.register_exists?x.total_attendance:'',x.cumulative_male,x.cumulative_female,x.cumulative_total])
+  ];
+  const csv='\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  const safe=(c.class_code+'_'+p.label).replace(/[^A-Za-z0-9_-]+/g,'_');
+  a.href=url;a.download='SRL_Attendance_'+safe+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function schoolId(){return state.bootstrap?.classes?.[0]?.school_id||null;}
+function adminClasses(){return state.bootstrap?.classes||[];}
+function showAdminMsg(id,text,type='info'){const el=$(id);el.textContent=text;el.className='banner '+type;el.classList.remove('hidden');}
+async function loadAdminStudents(){
+  const sid=schoolId();if(!sid)return;
+  showAdminMsg('studentManageMsg','Loading pupil roster…','info');
+  const {data,error}=await sb.rpc('attendance_admin_student_roster',{p_school_id:sid});
+  if(error){showAdminMsg('studentManageMsg',error.message,'warn');return;}
+  state.adminRoster=data;$('studentManageMsg').classList.add('hidden');$('studentAdminCount').textContent=(data.total_current||0)+' current pupils';
+  fillGroupedClasses($('studentClassFilter'),data.classes||[],{blankLabel:'All classes',compact:true});
+  fillGroupedClasses($('tiClass'),data.classes||[],{compact:true});renderAdminStudents();renderMovements();
+}
+function renderAdminStudents(){
+  const list=$('adminStudentList');list.innerHTML='';if(!state.adminRoster)return;
+  const q=$('studentSearch').value.trim().toLowerCase(),classId=$('studentClassFilter').value;
+  const rows=(state.adminRoster.students||[]).filter(s=>(!classId||s.class_id===classId)&&(!q||s.full_name.toLowerCase().includes(q)||(s.student_ref||'').toLowerCase().includes(q)));
+  if(!rows.length){list.innerHTML='<div class="card empty-state">No pupils match this filter.</div>';return;}
+  rows.forEach(s=>{
+    const el=document.createElement('div');el.className='list-card';
+    el.innerHTML='<div class="list-title">'+esc(s.full_name)+'</div><div class="list-meta"><span class="chip">'+esc(s.class_code)+'</span><span class="chip">'+esc(s.student_ref)+'</span> '+esc(s.reporting_group||'Mainstream')+'<br>Enrolled from '+esc(s.start_date)+(s.last_attendance_date?' · Last saved attendance '+esc(s.last_attendance_date):'')+'</div><div class="row-actions"><button class="btn btn-light move-class" data-id="'+esc(s.enrolment_id)+'">Move Class</button><button class="btn btn-danger transfer-out" data-id="'+esc(s.enrolment_id)+'">Transfer Out</button></div>';
+    list.appendChild(el);
+  });
+  list.querySelectorAll('.move-class').forEach(b=>b.addEventListener('click',()=>openMoveClass(b.dataset.id)));
+  list.querySelectorAll('.transfer-out').forEach(b=>b.addEventListener('click',()=>openTransferOut(b.dataset.id)));
+}
+function renderMovements(){
+  const el=$('movementList');const rows=state.adminRoster?.recent_movements||[];
+  if(!rows.length){el.innerHTML='<div class="empty-state">No student movements recorded yet.</div>';return;}
+  el.innerHTML=rows.slice(0,20).map(m=>'<div class="list-card"><div class="list-title">'+esc(m.full_name)+'</div><div class="list-meta"><span class="chip">'+esc(m.movement_type.replaceAll('_',' '))+'</span> Effective '+esc(m.effective_date)+(m.from_class_code?' · '+esc(m.from_class_code):'')+(m.to_class_code?' → '+esc(m.to_class_code):'')+(m.note?'<br>'+esc(m.note):'')+'</div></div>').join('');
+}
+function findAdminStudent(enrolmentId){return (state.adminRoster?.students||[]).find(s=>s.enrolment_id===enrolmentId);}
+function openTransferOut(id){
+  const s=findAdminStudent(id);if(!s)return;state.selectedAdminStudent=s;
+  $('toStudentLabel').textContent=s.full_name+' · '+s.class_code+' · '+s.student_ref;$('toDate').value=bruneiToday();$('toRemarks').value='';$('toMsg').textContent='';$('transferOutDialog').showModal();
+}
+function openMoveClass(id){
+  const s=findAdminStudent(id);if(!s)return;state.selectedAdminStudent=s;
+  $('mcStudentLabel').textContent=s.full_name+' · currently '+s.class_code;fillGroupedClasses($('mcClass'),state.adminRoster.classes||[],{excludeId:s.class_id,compact:true});$('mcDate').value=bruneiToday();$('mcRemarks').value='';$('mcMsg').textContent='';$('moveClassDialog').showModal();
+}
+async function loadAdminTeachers(){
+  showAdminMsg('teacherAdminMsg','Loading teacher access…','info');
+  const [rq,tr]=await Promise.all([sb.rpc('attendance_admin_teacher_requests',{p_status:'pending'}),sb.rpc('attendance_admin_teachers')]);
+  if(rq.error||tr.error){showAdminMsg('teacherAdminMsg',(rq.error||tr.error).message,'warn');return;}
+  state.teacherRequests=rq.data||[];state.teachers=tr.data||[];$('teacherAdminMsg').classList.add('hidden');renderTeachers();
+}
+function renderTeachers(){
+  $('pendingTeacherCount').textContent=state.teacherRequests.length;$('activeTeacherCount').textContent=state.teachers.filter(t=>t.active).length;$('inactiveTeacherCount').textContent=state.teachers.filter(t=>!t.active).length;
+  const rq=$('teacherRequestList');rq.innerHTML='';
+  if(!state.teacherRequests.length)rq.innerHTML='<div class="card empty-state">No pending teacher requests.</div>';
+  state.teacherRequests.forEach(r=>{
+    const el=document.createElement('div');el.className='list-card';
+    const options=adminClasses().map(c=>'<option value="'+esc(c.id)+'" '+(c.id===r.requested_class_id?'selected':'')+'>'+esc(c.class_code)+'</option>').join('');
+    el.innerHTML='<div class="list-title">'+esc(r.full_name)+'</div><div class="list-meta">'+esc(r.email)+'<br>Requested: '+esc(r.requested_class_code)+' · '+(r.requested_role==='assistant_teacher'?'Assistant Teacher':'Class Teacher')+'</div><div class="field"><label>Approved class</label><select class="approve-class">'+options+'</select></div><div class="field"><label>Approved role</label><select class="approve-role"><option value="class_teacher" '+(r.requested_role==='class_teacher'?'selected':'')+'>Class Teacher</option><option value="assistant_teacher" '+(r.requested_role==='assistant_teacher'?'selected':'')+'>Assistant Teacher</option></select></div><div class="row-actions"><button class="btn btn-primary approve-teacher">Approve</button><button class="btn btn-danger reject-teacher">Reject</button></div>';
+    el.querySelector('.approve-teacher').addEventListener('click',()=>reviewTeacher(r,el,'approve'));
+    el.querySelector('.reject-teacher').addEventListener('click',()=>reviewTeacher(r,el,'reject'));rq.appendChild(el);
+  });
+  const tl=$('teacherList');tl.innerHTML='';
+  if(!state.teachers.length)tl.innerHTML='<div class="card empty-state">No approved teacher accounts yet.</div>';
+  state.teachers.forEach(t=>{
+    const classes=(t.classes||[]).map(c=>c.class_code).join(', ')||'No active class';
+    const el=document.createElement('div');el.className='list-card';el.innerHTML='<div class="list-title">'+esc(t.email)+'</div><div class="list-meta"><span class="chip '+(t.active?'active':'inactive')+'">'+(t.active?'Active':'Disabled')+'</span> '+esc(classes)+'</div><div class="row-actions"><button class="btn '+(t.active?'btn-danger':'btn-primary')+' toggle-teacher">'+(t.active?'Disable Attendance Access':'Enable Attendance Access')+'</button></div>';
+    el.querySelector('.toggle-teacher').addEventListener('click',()=>toggleTeacher(t));tl.appendChild(el);
+  });
+}
+async function reviewTeacher(r,card,action){
+  const cls=card.querySelector('.approve-class')?.value||r.requested_class_id;const role=card.querySelector('.approve-role')?.value||r.requested_role;
+  const note=action==='reject'?prompt('Optional reason for rejection:',''):null;if(action==='reject'&&note===null)return;
+  const verb=action==='approve'?'Approve':'Reject';if(!confirm(verb+' '+r.full_name+'?'))return;
+  const {error}=await sb.rpc('attendance_admin_review_teacher_request',{p_request_id:r.request_id,p_action:action,p_class_id:action==='approve'?cls:null,p_assignment_type:action==='approve'?role:null,p_admin_note:note||null});
+  if(error){showAdminMsg('teacherAdminMsg',error.message,'warn');return;}showAdminMsg('teacherAdminMsg',verb+'d successfully.','ok');await loadAdminTeachers();
+}
+async function toggleTeacher(t){
+  const next=!t.active;if(!confirm((next?'Enable':'Disable')+' Attendance access for '+t.email+'?'))return;
+  const {error}=await sb.rpc('attendance_admin_set_teacher_active',{p_user_id:t.user_id,p_school_id:t.school_id,p_active:next});
+  if(error){showAdminMsg('teacherAdminMsg',error.message,'warn');return;}showAdminMsg('teacherAdminMsg','Attendance access '+(next?'enabled.':'disabled.'),'ok');await loadAdminTeachers();
+}
+
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();$('loginMsg').textContent='';$('loginBtn').disabled=true;$('loginBtn').innerHTML='<span class="spinner"></span> Signing in';
+  const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  $('loginBtn').disabled=false;$('loginBtn').textContent='Sign In';
+  if(error){$('loginMsg').textContent=error.message;return;}await enterApp();
+});
+
+$('openSignupBtn').addEventListener('click',showSignup);
+$('backToLoginBtn').addEventListener('click',showLogin);
+$('signupForm').addEventListener('submit',async e=>{
+  e.preventDefault();$('signupMsg').textContent='';$('signupBtn').disabled=true;
+  const name=$('signupName').value.trim(),email=$('signupEmail').value.trim(),password=$('signupPassword').value,classId=$('signupClass').value,role=$('signupRole').value;
+  localStorage.setItem(PENDING_SIGNUP_KEY,JSON.stringify({name,classId,role}));
+  const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin+'/'}});
+  $('signupBtn').disabled=false;
+  if(error){$('signupMsg').textContent=error.message;return;}
+  if(data.session){
+    try{await submitTeacherRequest(name,classId,role);localStorage.removeItem(PENDING_SIGNUP_KEY);await enterApp();}
+    catch(err){$('signupMsg').textContent=err.message;}
+  }else{
+    $('signupMsg').style.color='#147a4b';$('signupMsg').textContent='Account created. Check your email and verify the address, then return here. Your approval request will be completed after sign-in.';
+  }
+});
+$('gateRequestForm').addEventListener('submit',async e=>{
+  e.preventDefault();$('gateMsg').textContent='Submitting request…';$('gateSubmitBtn').disabled=true;
+  try{await submitTeacherRequest($('gateName').value.trim(),$('gateClass').value,$('gateRole').value);localStorage.removeItem(PENDING_SIGNUP_KEY);const st=await sb.rpc('attendance_teacher_status');if(st.error)throw st.error;await showTeacherGate(st.data);}
+  catch(err){$('gateMsg').textContent=err.message;}finally{$('gateSubmitBtn').disabled=false;}
+});
+$('checkApprovalBtn').addEventListener('click',enterApp);
+$('gateSignOutBtn').addEventListener('click',async()=>{await sb.auth.signOut();showLogin();});
+
+$('forgotBtn').addEventListener('click',async()=>{
+  const email=$('email').value.trim();
+  if(!email){$('loginMsg').textContent='Enter your email address first.';return;}
+  $('forgotBtn').disabled=true;
+  $('loginMsg').textContent='Sending password reset email…';
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/'});
+  $('forgotBtn').disabled=false;
+  if(error){$('loginMsg').textContent=error.message;return;}
+  $('loginMsg').style.color='#147a4b';
+  $('loginMsg').textContent='Password reset email sent. Open the email on this phone and tap the recovery link.';
+});
+$('recoveryForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  $('recoveryMsg').textContent='';
+  if($('newPassword').value!==$('confirmPassword').value){
+    $('recoveryMsg').textContent='The two passwords do not match.';return;
+  }
+  $('recoveryBtn').disabled=true;
+  const {error}=await sb.auth.updateUser({password:$('newPassword').value});
+  $('recoveryBtn').disabled=false;
+  if(error){$('recoveryMsg').textContent=error.message;return;}
+  $('recoveryMsg').style.color='#147a4b';
+  $('recoveryMsg').textContent='Password updated successfully. Loading Attendance…';
+  setTimeout(()=>enterApp(),700);
+});
+$('signOutBtn').addEventListener('click',async()=>{await sb.auth.signOut();showLogin();});
+$('classSelect').addEventListener('change',async e=>{
+  if(!confirmDiscard()){
+    if(state.currentClassId)e.target.value=state.currentClassId;
+    return;
+  }
+  await loadRegister();
+});
+$('dateInput').addEventListener('change',async e=>{
+  if(!confirmDiscard()){
+    if(state.currentDate)e.target.value=state.currentDate;
+    return;
+  }
+  await loadRegister();
+});
+$('todayBtn').addEventListener('click',async()=>{
+  const today=bruneiToday();
+  if($('dateInput').value===today)return;
+  if(!confirmDiscard())return;
+  $('dateInput').value=today;
+  await loadRegister();
+});
+$('reloadBtn').addEventListener('click',async()=>{
+  if(!confirmDiscard())return;
+  await loadRegister();
+});
+$('allPresentBtn').addEventListener('click',markAllPresent);
+$('clearBtn').addEventListener('click',clearAll);
+$('correctionReason').addEventListener('input',updateSummary);
+$('saveBtn').addEventListener('click',save);
+
+$('attendanceTabBtn').addEventListener('click',()=>switchPanel('attendance'));
+$('dashboardTabBtn').addEventListener('click',()=>switchPanel('dashboard'));
+$('dashboardMonth').addEventListener('change',loadAdminDashboard);
+$('refreshDashboardBtn').addEventListener('click',loadAdminDashboard);
+$('statisticsTabBtn').addEventListener('click',()=>switchPanel('statistics'));
+$('reportsTabBtn').addEventListener('click',()=>switchPanel('reports'));
+$('reportClassSelect').addEventListener('change',loadReportOptions);
+$('reportType').addEventListener('change',syncReportTypeUI);
+$('loadReportBtn').addEventListener('click',loadPeriodReport);
+$('exportReportBtn').addEventListener('click',exportPeriodReport);
+$('refreshStatsBtn').addEventListener('click',loadMonthlyStats);
+$('statsClassSelect').addEventListener('change',loadMonthlyStats);
+$('statsMonth').addEventListener('change',loadMonthlyStats);
+$('studentsTabBtn').addEventListener('click',()=>switchPanel('students'));
+$('teachersTabBtn').addEventListener('click',()=>switchPanel('teachers'));
+$('studentSearch').addEventListener('input',renderAdminStudents);
+$('studentClassFilter').addEventListener('change',renderAdminStudents);
+$('refreshStudentsBtn').addEventListener('click',loadAdminStudents);
+$('refreshTeachersBtn').addEventListener('click',loadAdminTeachers);
+$('transferInBtn').addEventListener('click',()=>{$('transferInForm').reset();$('tiStats').checked=true;$('tiDate').value=bruneiToday();$('tiMsg').textContent='';fillGroupedClasses($('tiClass'),state.adminRoster?.classes||adminClasses(),{compact:true});$('transferInDialog').showModal();});
+$('tiGroup').addEventListener('change',()=>{$('tiStats').checked=$('tiGroup').value==='Mainstream';});
+document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
+$('transferInForm').addEventListener('submit',async e=>{
+  e.preventDefault();if(!confirm('Add '+$('tiName').value.trim()+' to '+$('tiClass').selectedOptions[0]?.textContent+' from '+$('tiDate').value+'?'))return;
+  $('tiSaveBtn').disabled=true;$('tiMsg').textContent='Saving…';
+  const {data,error}=await sb.rpc('attendance_admin_transfer_in',{p_school_id:schoolId(),p_class_id:$('tiClass').value,p_student_ref:$('tiRef').value.trim(),p_full_name:$('tiName').value.trim(),p_gender:$('tiGender').value||null,p_start_date:$('tiDate').value,p_reporting_group:$('tiGroup').value,p_include_in_class_stats:$('tiStats').checked,p_remarks:$('tiRemarks').value.trim()||null});
+  $('tiSaveBtn').disabled=false;if(error){$('tiMsg').textContent=error.message;return;}$('transferInDialog').close();showAdminMsg('studentManageMsg','Transfer In saved.'+(data.backfill_registers?' '+data.backfill_registers+' previously saved register(s) exist from the start date and should be reviewed.':''),'ok');await loadAdminStudents();
+});
+$('transferOutForm').addEventListener('submit',async e=>{
+  e.preventDefault();const s=state.selectedAdminStudent;if(!s)return;if(!confirm('Transfer '+s.full_name+' out after '+$('toDate').value+'? Historical attendance will be preserved.'))return;
+  $('toSaveBtn').disabled=true;const {data,error}=await sb.rpc('attendance_admin_transfer_out',{p_enrolment_id:s.enrolment_id,p_last_date:$('toDate').value,p_remarks:$('toRemarks').value.trim()||null});$('toSaveBtn').disabled=false;
+  if(error){$('toMsg').textContent=error.message;return;}$('transferOutDialog').close();showAdminMsg('studentManageMsg','Transfer Out saved. '+data.preserved_attendance_records+' attendance record(s) preserved.','ok');await loadAdminStudents();
+});
+$('moveClassForm').addEventListener('submit',async e=>{
+  e.preventDefault();const s=state.selectedAdminStudent;if(!s)return;const dest=$('mcClass').selectedOptions[0]?.textContent||'new class';if(!confirm('Move '+s.full_name+' from '+s.class_code+' to '+dest+' starting '+$('mcDate').value+'?'))return;
+  $('mcSaveBtn').disabled=true;const {data,error}=await sb.rpc('attendance_admin_move_class',{p_enrolment_id:s.enrolment_id,p_to_class_id:$('mcClass').value,p_move_date:$('mcDate').value,p_remarks:$('mcRemarks').value.trim()||null});$('mcSaveBtn').disabled=false;
+  if(error){$('mcMsg').textContent=error.message;return;}$('moveClassDialog').close();showAdminMsg('studentManageMsg','Class move saved. '+data.preserved_attendance_records+' old-class attendance record(s) preserved.'+(data.backfill_registers?' '+data.backfill_registers+' saved destination register(s) exist from the move date and should be reviewed.':''),'ok');await loadAdminStudents();
+});
+
+window.addEventListener('beforeunload',e=>{
+  if(hasUnsavedChanges()){
+    e.preventDefault();
+    e.returnValue='';
+  }
+});
+
+
+init();
+</script>
+</body>
+</html>
