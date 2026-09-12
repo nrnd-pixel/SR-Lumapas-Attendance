@@ -1,0 +1,48 @@
+name: Phase 0A Integrity
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-frozen-v1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify expected files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f netlify.toml
+          test -f README.txt
+
+      - name: Verify frozen index checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "199d93f81c1cdb1742544f0dbde3f9da2e264b9d2dc16e4ce93cd53140387086  index.html" | sha256sum --check --strict
+
+      - name: Extract inline ES module
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          html = Path("index.html").read_text(encoding="utf-8")
+          matches = re.findall(r'<script\s+type="module"[^>]*>(.*?)</script>', html, flags=re.S | re.I)
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one inline ES module, found {len(matches)}")
+          Path("/tmp/attendance-v1-module.mjs").write_text(matches[0], encoding="utf-8")
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check /tmp/attendance-v1-module.mjs
