@@ -22,6 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f index.html
+          test -f assets/js/main.js
           test -f netlify.toml
           test -f README.txt
 
@@ -33,20 +34,35 @@ jobs:
           git show c578b4240a2bd9899db602fa818bda99bd6ff3cd:index.html > /tmp/attendance-v1-frozen.html
           echo "199d93f81c1cdb1742544f0dbde3f9da2e264b9d2dc16e4ce93cd53140387086  /tmp/attendance-v1-frozen.html" | sha256sum --check --strict
 
-      - name: Extract current inline ES module
+      - name: Verify Phase 3A external-module extraction equivalence
         shell: python
         run: |
           from pathlib import Path
           import re
+          import subprocess
 
-          html = Path("index.html").read_text(encoding="utf-8")
-          matches = re.findall(r'<script\s+type="module"[^>]*>(.*?)</script>', html, flags=re.S | re.I)
+          base_sha = "88fffe819a4b287bd05c48c0933ebf14c7d913d2"
+          subprocess.run(["git", "cat-file", "-e", f"{base_sha}^{{commit}}"], check=True)
+          before = subprocess.check_output(["git", "show", f"{base_sha}:index.html"], text=True)
+
+          matches = list(re.finditer(r'<script\s+type="module"[^>]*>\n(.*?)</script>', before, flags=re.S | re.I))
           if len(matches) != 1:
-              raise SystemExit(f"Expected exactly one inline ES module, found {len(matches)}")
-          Path("/tmp/attendance-current-module.mjs").write_text(matches[0], encoding="utf-8")
+              raise SystemExit(f"Expected exactly one pre-Phase-3 inline ES module, found {len(matches)}")
+
+          match = matches[0]
+          expected_module = match.group(1)
+          current_module = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_module != expected_module:
+              raise SystemExit("assets/js/main.js is not byte-for-byte equivalent to the pre-Phase-3 inline module")
+
+          loader = '<script type="module" src="./assets/js/main.js"></script>'
+          expected_html = before[:match.start()] + loader + before[match.end():]
+          current_html = Path("index.html").read_text(encoding="utf-8")
+          if current_html != expected_html:
+              raise SystemExit("index.html contains changes beyond the exact Phase 3A module extraction")
 
       - name: Check current JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
-          node --check /tmp/attendance-current-module.mjs
+          node --check assets/js/main.js

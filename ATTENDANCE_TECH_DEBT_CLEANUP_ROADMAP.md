@@ -163,7 +163,12 @@ Phase 2 checkpoint split:
 **Exit:** no known recovery, stale-response, cross-account pending-signup, or hosted Auth redirect-configuration correctness issue remains in the cleaned build.
 
 ### Phase 3 — Frontend modularisation
+**Status:** In progress on `cleanup/phase-3a-extract-main-module`. Phase 3A source-equivalent external-module extraction is implemented and verified on an isolated branch; the Netlify deployment boundary is verified; merge approval remains pending. Phase 3B has not started.
 **Goal:** Remove the single-file frontend bottleneck without changing behaviour.
+
+Phase 3 checkpoint split:
+- **3A — Extract main application module:** move the existing inline ES module verbatim to `assets/js/main.js` and replace it with one same-origin `<script type="module" src="./assets/js/main.js"></script>` loader. Preserve all function bodies/order, DOM IDs/selectors, Supabase calls, state semantics, recovery startup ordering, request-serial stale-response guards, attendance/correction behaviour, reporting behaviour, and admin behaviour. The Phase 0A integrity gate must prove byte-for-byte equivalence against exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2` and syntax-check the external module. No SQL/RPC/grant/RLS/Auth/Science/Netlify configuration change is permitted. **Implemented and verified; merge approval pending.**
+- **3B+ — Ownership split:** only after 3A is merged and separately approved, split shared client/state/UI/auth/attendance/reporting/admin ownership in small reversible checkpoints. Do not combine dependency migration, CSP hardening, backend security changes, or UI redesign with the first extraction.
 
 Target ownership:
 - config/environment;
@@ -262,7 +267,8 @@ Recommended order:
 - v0.7 live and v1.0 cleanup `main` have diverged by design.
 - The password-recovery routing race remains a known behaviour of the protected v0.7 production baseline; the Phase 2A fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
 - The shared-device pending-signup bug remains a known behaviour of the protected v0.7 production baseline; the Phase 2B fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
-- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A, Phase 2B, Phase 2C, or Phase 2D; independently verify the live deployment boundary before any release decision.
+- Live Netlify Build & deploy settings evidence supplied on 13 September 2026 shows `Current repository: Not linked` for the SR Lumapas site. The site is therefore not currently connected to this GitHub repository for Netlify continuous deployment; merging GitHub `main` does not by itself trigger a Netlify Git deploy. No Netlify setting was changed, and explicit release/promotion discipline remains mandatory.
+- Phase 3A changes the frontend loader from inline JavaScript to a same-origin external module. Repository/CI proves source equivalence, and live Netlify evidence clears the Git-linked auto-deploy blocker because the site reports `Current repository: Not linked`. GitHub `main` itself is still unprotected and has no repository rulesets, so explicit PR review/approval discipline remains a required guardrail.
 - Stale async-response overwrites are guarded on cleanup `main` by request-serial/selection-key checks with deterministic browser coverage. This does not constitute production promotion; v0.7 remains the protected live baseline until an explicitly approved release.
 - Fresh Phase 2D live Dashboard evidence confirms the production Site URL/Redirect URL pair still matches the frontend. The wildcard Redirect URL is broader than the exact root path the current frontend requests; leave it unchanged in Phase 2D because no correctness mismatch exists. Review any narrowing or preview-host additions separately with release/pilot scope.
 
@@ -308,21 +314,21 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 2 — CORRECTNESS FIXES COMPLETE AND MERGED. Phase 3 has not started.
+**Current checkpoint:** Phase 3A — EXTERNAL MAIN-MODULE EXTRACTION IMPLEMENTED AND VERIFIED; NETLIFY DEPLOYMENT BOUNDARY VERIFIED; MERGE APPROVAL PENDING. Phase 3B has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Current verified cleanup `main`: `97a17d87863cc8eb6c25263b57c139091c1e7189`.
-- PR #14 — `Phase 2D: verify Auth redirect configuration contract` — merged with an expected-head SHA guard at exact verified head `f949407811e170da82052613905ba190fea8c29e`.
-- Merge commit: `97a17d87863cc8eb6c25263b57c139091c1e7189`, signed/verified by GitHub, with parents `ee962e793b267e63938133b95df8e36a8439f37a` and `f949407811e170da82052613905ba190fea8c29e`.
-- Exact-final-head CI before merge was green: Phase 0A Integrity `34749816234`, Phase 0B Backend Contract `34749816250`, and Phase 1 Playwright `34749816255` with 34/34 Chromium tests in 10.8s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities.
-- Fresh user-provided Supabase Dashboard evidence on 13 September 2026 confirms Site URL `https://srlumapas.netlify.app/` and sole Redirect URL `https://srlumapas.netlify.app/**`; no hosted Auth mutation was required.
-- Current frontend requests `window.location.origin + '/'` for signup verification and password recovery, and browser coverage now asserts that exact contract dynamically against the current origin.
-- Phase 2D made no runtime, Supabase/Auth configuration, RPC, SQL, grant, RLS, Science, `netlify.toml`, DOM, production-data, or deployment change.
-- No explicit production promotion was performed. Netlify account-level auto-deploy linkage remains outside repository evidence and must be independently verified before release.
+- Exact signed cleanup `main` / Phase 3A base: `88fffe819a4b287bd05c48c0933ebf14c7d913d2` (PR #15 Phase 2 roadmap-closure merge).
+- Active branch: `cleanup/phase-3a-extract-main-module`; draft PR #16.
+- Phase 3A moves the former inline application ES module verbatim to `assets/js/main.js` and leaves `index.html` with one same-origin external module loader. No application logic, DOM ID/selector, CSS, RPC argument/return contract, Supabase/Auth setting, SQL, grant, RLS, Science object, `netlify.toml`, production data, or production-promotion action is changed.
+- Phase 0A now preserves the original frozen v1.0 checksum and additionally reconstructs the expected Phase 3A result from exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2`; it requires `assets/js/main.js` to equal the former inline module byte-for-byte and `index.html` to differ only by the external loader, then syntax-checks `assets/js/main.js`.
+- First implementation head `608eea92ea2559b48057c9ea08bde8bedea826ce` passed all required gates: Phase 0A Integrity `34755738953`, Phase 0B Backend Contract `34755738940`, and Phase 1 Playwright `34755738981` with 34/34 Chromium tests in 13.4s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities.
+- The existing GitHub Actions warning that `actions/checkout@v4` / `actions/setup-node@v4` target deprecated Node 20 and are forced onto Node 24 remains separate workflow-maintenance debt; the application test runtime is Node 22.
+- User-provided live Netlify Build & deploy settings evidence on 13 September 2026 shows `Current repository: Not linked`. Therefore this site is not currently Git-linked for Netlify continuous deployment, and merging GitHub `main` cannot automatically publish PR #16 through a repository connection. No Netlify configuration was changed.
+- No explicit production promotion has been performed; protected live v0.7 remains the release boundary.
 
-**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` as a production release.
+**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat the Phase 3A branch or cleanup `main` as a production release.
 
-**Next action:** STOP before Phase 3. The next engineering action, only after explicit user approval, is a fresh Phase 3 frontend-modularisation impact map from exact current `main`. Do not begin Phase 3 automatically.
+**Next action:** rerun exact-current-head CI/diff review after this evidence-only roadmap update. If all gates remain green, move PR #16 to ready-for-review and STOP before merge and before Phase 3B until explicit user approval.
 
 **Recommended thinking effort:** High.
 
@@ -363,3 +369,5 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** Phase 2D impact/evidence mapping completed from exact signed `main` `ee962e793b267e63938133b95df8e36a8439f37a`. Current frontend signup and password recovery both request `window.location.origin + '/'`. Fresh user-provided Supabase Dashboard evidence confirms hosted Site URL `https://srlumapas.netlify.app/` and sole Redirect URL `https://srlumapas.netlify.app/**`, matching the Phase 0B record and current frontend; no hosted Auth configuration mutation is required. Current Supabase guidance recommends exact production redirect paths where practical, but wildcard narrowing is classified as optional hardening rather than a correctness fix, and Netlify preview-host allow-list design is deferred to pilot/staging scope.
 - **13 Sep 2026:** User approved Phase 2D closure. Created `cleanup/phase-2d-auth-redirect-verification` from exact signed `main` `ee962e793b267e63938133b95df8e36a8439f37a` and opened draft PR #14. Test-only head `6829e9976d179bc8f6f4f370f3f0b790178969da` added two redirect-contract assertions with no runtime change and passed all required gates: Phase 0A `34749695923`, Phase 0B `34749695938`, and Playwright `34749696089` with 34/34 Chromium tests in 14.7s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. This roadmap update closes Phase 2 on the branch; exact-final-head CI remains mandatory before merge. Do not begin Phase 3 automatically.
 - **13 Sep 2026:** Phase 2 completed. PR #14 was re-verified at exact head `f949407811e170da82052613905ba190fea8c29e` with exactly two changed files and all three required gates green (Phase 0A `34749816234`; Phase 0B `34749816250`; Playwright `34749816255`: 34/34 passed in 10.8s, Node `v22.23.2`, npm `10.9.8`, 0 vulnerabilities), then merged with an expected-head SHA guard. Verified signed new cleanup `main` at `97a17d87863cc8eb6c25263b57c139091c1e7189`, with parents `ee962e793b267e63938133b95df8e36a8439f37a` and `f949407811e170da82052613905ba190fea8c29e`. No runtime, backend, hosted Auth, Science, Netlify, production-data, or explicit production-promotion change was included. Phase 3 remains unstarted.
+- **13 Sep 2026:** Phase 3A impact mapping completed from exact signed `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2`. Confirmed `index.html` owns the full frontend inline ES module; no Attendance wrapper chain exists; all 18 live frontend RPC signatures remain present; 11 are SECURITY DEFINER and 7 SECURITY INVOKER; Attendance table RLS/direct-DML risk remains unchanged and deferred to Phase 5. User approved Phase 3A. On `cleanup/phase-3a-extract-main-module`, the inline module was extracted verbatim to `assets/js/main.js`, `index.html` now uses a same-origin external module loader, and Phase 0A was strengthened to prove exact source/HTML transformation equivalence. First implementation head `608eea92ea2559b48057c9ea08bde8bedea826ce` passed Phase 0A `34755738953`, Phase 0B `34755738940`, and Playwright `34755738981` (34/34 in 13.4s, 0 vulnerabilities). Netlify account-level auto-publish verification remains a mandatory pre-merge gate; Phase 3B is unstarted.
+- **13 Sep 2026:** Live Netlify Build & deploy settings evidence supplied by the user shows the SR Lumapas site's `Current repository` as `Not linked`. This clears the Phase 3A Git-linked auto-publish blocker: merging GitHub `main` does not by itself trigger a Netlify continuous deployment for the protected live site. No Netlify setting was changed. GitHub `main` remains unprotected with no repository rulesets, so PR-only/explicit-approval discipline remains mandatory.
