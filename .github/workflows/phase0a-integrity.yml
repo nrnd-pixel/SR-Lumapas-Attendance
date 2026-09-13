@@ -9,13 +9,15 @@ permissions:
   contents: read
 
 jobs:
-  verify-frozen-v1:
+  verify-baseline-and-current:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out repository with frozen baseline history
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Verify expected files
+      - name: Verify expected current files
         shell: bash
         run: |
           set -euo pipefail
@@ -23,13 +25,15 @@ jobs:
           test -f netlify.toml
           test -f README.txt
 
-      - name: Verify frozen index checksum
+      - name: Verify frozen Phase 0A index checksum
         shell: bash
         run: |
           set -euo pipefail
-          echo "199d93f81c1cdb1742544f0dbde3f9da2e264b9d2dc16e4ce93cd53140387086  index.html" | sha256sum --check --strict
+          git cat-file -e c578b4240a2bd9899db602fa818bda99bd6ff3cd^{commit}
+          git show c578b4240a2bd9899db602fa818bda99bd6ff3cd:index.html > /tmp/attendance-v1-frozen.html
+          echo "199d93f81c1cdb1742544f0dbde3f9da2e264b9d2dc16e4ce93cd53140387086  /tmp/attendance-v1-frozen.html" | sha256sum --check --strict
 
-      - name: Extract inline ES module
+      - name: Extract current inline ES module
         shell: python
         run: |
           from pathlib import Path
@@ -39,10 +43,10 @@ jobs:
           matches = re.findall(r'<script\s+type="module"[^>]*>(.*?)</script>', html, flags=re.S | re.I)
           if len(matches) != 1:
               raise SystemExit(f"Expected exactly one inline ES module, found {len(matches)}")
-          Path("/tmp/attendance-v1-module.mjs").write_text(matches[0], encoding="utf-8")
+          Path("/tmp/attendance-current-module.mjs").write_text(matches[0], encoding="utf-8")
 
-      - name: Check JavaScript syntax
+      - name: Check current JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
-          node --check /tmp/attendance-v1-module.mjs
+          node --check /tmp/attendance-current-module.mjs
