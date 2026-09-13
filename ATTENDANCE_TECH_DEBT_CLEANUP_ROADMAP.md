@@ -92,7 +92,7 @@ Actions:
 **Exit:** backend structure can be recreated without reverse-engineering the live project.
 
 ### Phase 1 — Regression safety net
-**Status:** In progress — Phase 1A Playwright foundation.
+**Status:** In progress — Phase 1A complete; Phase 1B not started.
 **Goal:** Protect current behaviour before refactoring.
 
 Required real browser scenarios:
@@ -268,30 +268,27 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 1A — Playwright browser-regression foundation IMPLEMENTED AND CI-GREEN IN DRAFT PR #4; not merged.
+**Current checkpoint:** Phase 1A — COMPLETE. Playwright browser-regression foundation is merged to `main`. Phase 1B and Phase 2 have not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Persistent-roadmap PR #3 merged successfully on 13 Sep 2026.
-- Verified post-roadmap `main` SHA: `ffcdb460b991c5873f22a97ac8767a2826c077a0`.
-- Canonical roadmap location: repository-root `ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md` on GitHub `main`. Future cleanup sessions must fetch this file directly; repeated ChatGPT Project Source uploads are no longer required.
-- Phase 1A branch: `cleanup/phase-1a-playwright-foundation`, created from exact `main` `ffcdb460b991c5873f22a97ac8767a2826c077a0`.
-- Draft PR #4: `Phase 1A: add Playwright regression foundation`.
-- Browser test implementation head before this roadmap-only update: `8176f45ea9c9c503f26647b00cf3e5dd6003cd06`.
+- Persistent roadmap is canonical at repository-root `ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md` on GitHub `main`; future sessions should fetch it directly and also check active cleanup PRs for a newer roadmap copy.
+- Verified current `main` SHA after Phase 1A merge: `c3c2068f428156a1071f4961f810bebdcbf597bd`.
+- PR #4 — `Phase 1A: add Playwright regression foundation` — merged successfully on 13 Sep 2026 from exact head `08e10ed7952e1e21adaafcf458d89f75e56b75ef` using an expected-head SHA guard.
+- Final pre-merge exact-head CI was green:
+  - `Phase 1 Playwright` run `34734060261` — success.
+  - `Phase 0A Integrity` run `34734060259` — success.
+  - `Phase 0B Backend Contract` run `34734060265` — success.
 - Phase 1A runs the real frozen `index.html` in Chromium while intercepting only the Supabase ESM import with a synthetic client. Production Supabase requests are blocked and asserted absent.
-- The frozen production frontend `index.html` remains byte-identical; no DOM, Supabase SQL, Science, Netlify, Auth configuration, or production-data change has been made.
-- Exact-head CI on `8176f45...` is green:
-  - `Phase 1 Playwright` run `34733865915` — success.
-  - `Phase 0A Integrity` run `34733865920` — success.
-  - `Phase 0B Backend Contract` run `34733865914` — success.
-- Playwright 1.63.0 is pinned. GitHub Actions `npm install` reports **0 vulnerabilities**.
-- Chromium executes 12 tests with one worker; all 12 complete successfully under Playwright's expected-failure semantics.
+- The frozen production frontend remains unchanged; no DOM, Supabase SQL, Science, Netlify, Auth configuration, or production-data change was made by Phase 1A.
+- Playwright 1.63.0 is pinned; GitHub Actions `npm install` reported 0 vulnerabilities on the final head.
+- Chromium executes 12 tests with one worker; all 12 complete successfully under Playwright expected-failure semantics.
 - Passing baseline coverage includes normal teacher login/logout, signed-in refresh, teacher/admin class scope, signup/email-verification return to Pending Approval, password mismatch validation, first register save, Mark All Present, exception editing, unchanged saved-register behaviour, correction-reason/payload behaviour, unsaved-change protection, and mobile overflow smoke coverage.
-- The confirmed password-recovery startup race and current successful-reset-to-app behaviour are encoded with full desired assertions using explicit `test.fail(...)` expected-failure markers. They are not skipped and the assertions are not weakened; Phase 2 must remove those markers and make the same tests pass normally.
-- Phase 1B admin-management/reporting coverage and Phase 2 correctness fixes remain out of scope for PR #4.
+- The confirmed password-recovery startup race and current successful-reset-to-app behaviour remain encoded with full desired assertions using explicit `test.fail(...)` expected-failure markers. They are not skipped and the assertions are not weakened; Phase 2 must remove those markers and make the same tests pass normally.
+- Phase 1B still needs browser coverage for admin student management, teacher approval/enable-disable flows, monthly statistics, admin school dashboard, Term/YTD reporting, CSV export, and reporting invariants.
 
 **Production safeguard:** keep v0.7 live and unchanged during cleanup.
 
-**Next action:** rerun all three CI gates on the final PR #4 head after this roadmap-only update, review the exact diff, and stop at the Phase 1A merge-approval gate. Do not begin Phase 1B or Phase 2 automatically.
+**Next action:** STOP at the Phase 1A completion gate. Begin Phase 1B only after explicit user approval. Do not begin Phase 2 automatically.
 
 **Recommended thinking effort:** High.
 
@@ -311,3 +308,4 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** User approved the persistent GitHub roadmap and subsequent Phase 1A Playwright foundation. Created documentation branch `docs/persistent-cleanup-roadmap` from exact `main` `71bfd7dc9b6a14fd6c80021ba034e0ead8edc2e2`. The root roadmap file will become canonical across future chats once merged; Phase 1A remains unstarted until that documentation PR is merged and verified.
 - **13 Sep 2026:** Persistent roadmap PR #3 merged with expected head `7f3f7ebc137e8142b94b0d0e6df0337fdc68adce`; verified new `main` at `ffcdb460b991c5873f22a97ac8767a2826c077a0`. Repository-root `ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md` is now canonical across future sessions. Created `cleanup/phase-1a-playwright-foundation` from that exact SHA and began only the previously approved browser-regression foundation; no production/runtime change.
 - **13 Sep 2026:** Phase 1A browser foundation implemented in draft PR #4. Initial Playwright 1.55.0 run passed 12 browser tests but npm reported 2 high-severity dependency vulnerabilities; upgraded the test-only dependency to current stable Playwright 1.63.0 after checking npm. Exact head `8176f45ea9c9c503f26647b00cf3e5dd6003cd06` then passed Phase 1 Playwright run `34733865915`, Phase 0A run `34733865920`, and Phase 0B run `34733865914`; npm audit reported 0 vulnerabilities. No frontend or live-system change.
+- **13 Sep 2026:** Phase 1A completed. PR #4 was re-verified at exact head `08e10ed7952e1e21adaafcf458d89f75e56b75ef`, with exactly eight approved files and all three CI gates green, then marked ready and merged with an expected-head SHA guard. Verified current `main` at merge commit `c3c2068f428156a1071f4961f810bebdcbf597bd`. The Playwright browser-regression foundation is now on `main`; live v0.7 and production Supabase remain unchanged. Phase 1B and Phase 2 have not started.
