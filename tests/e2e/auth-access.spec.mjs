@@ -132,6 +132,9 @@ test('signup returns from email verification into Pending Approval', async ({ pa
   await page.locator('#signupBtn').click();
 
   await expect(page.locator('#signupMsg')).toContainText('Check your email');
+  const signupRedirectRoot = await page.evaluate(() => window.location.origin + '/');
+  const signupCall = (await harness.calls()).auth.find(call => call.method === 'signUp');
+  expect(signupCall?.payload?.options?.emailRedirectTo).toBe(signupRedirectRoot);
   expect(await readPendingSignup(page)).toEqual({
     version: 2,
     userId: 'user-new-teacher',
@@ -296,6 +299,23 @@ test('legacy unbound pending signup state is discarded instead of attributed to 
 
   const calls = await harness.calls();
   expect(calls.rpc.filter(call => call.name === 'attendance_submit_teacher_request')).toEqual([]);
+  await harness.expectNoProductionRequests();
+});
+
+test('forgot password sends the current origin root as recovery redirect', async ({ page }) => {
+  const harness = await installHarness(page, { session: null, rpc: {} });
+  await page.goto('/');
+  await page.locator('#email').fill('teacher@example.test');
+  await page.locator('#forgotBtn').click();
+
+  await expect(page.locator('#loginMsg')).toContainText('Password reset email sent');
+  const recoveryRedirectRoot = await page.evaluate(() => window.location.origin + '/');
+  const resetCall = (await harness.calls()).auth.find(call => call.method === 'resetPasswordForEmail');
+  expect(resetCall).toEqual({
+    method: 'resetPasswordForEmail',
+    email: 'teacher@example.test',
+    options: { redirectTo: recoveryRedirectRoot }
+  });
   await harness.expectNoProductionRequests();
 });
 

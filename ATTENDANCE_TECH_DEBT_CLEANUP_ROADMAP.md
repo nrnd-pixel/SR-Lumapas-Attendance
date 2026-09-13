@@ -66,7 +66,7 @@ Acceptance coverage must prove:
 - new password works;
 - teacher/admin permissions and class assignments are preserved.
 
-Phase 2A implements the routing/session correction and is merged on the cleanup `main` via PR #8. Browser coverage proves recovery-screen priority, confirmation mismatch rejection, password update, recovery-session sign-out, return to normal login, old-password rejection, new-password acceptance, preservation of teacher class scope, and no Attendance RPC entry until normal post-reset sign-in. Credential-transition checks use the synthetic Auth harness rather than a real production teacher credential; hosted Auth configuration remains a later release/Phase 2D verification concern. This cleanup merge is not itself production promotion.
+Phase 2A implements the routing/session correction and is merged on the cleanup `main` via PR #8. Browser coverage proves recovery-screen priority, confirmation mismatch rejection, password update, recovery-session sign-out, return to normal login, old-password rejection, new-password acceptance, preservation of teacher class scope, and no Attendance RPC entry until normal post-reset sign-in. Credential-transition checks use the synthetic Auth harness rather than a real production teacher credential; hosted Auth configuration was separately re-verified in Phase 2D. This cleanup work is not itself production promotion.
 
 ## Roadmap
 
@@ -117,7 +117,7 @@ Required real browser scenarios:
 **Exit:** core workflows pass repeatably in automated browser tests.
 
 ### Phase 2 — Correctness fixes
-**Status:** In progress — Phase 2A password recovery, Phase 2B pending-signup account binding, and Phase 2C stale async-response protection are complete and merged on cleanup `main`; Phase 2D has not started.
+**Status:** Complete on the Phase 2D closure branch; merge pending. Phase 2A password recovery, Phase 2B pending-signup account binding, Phase 2C stale async-response protection, and Phase 2D hosted Auth URL/redirect verification are complete.
 **Goal:** Fix known defects before structural cleanup.
 
 Actions:
@@ -130,7 +130,7 @@ Phase 2 checkpoint split:
 - **2A — Password recovery correctness:** recovery takes startup priority; confirmation is validated; password is updated; recovery session is signed out; normal sign-in is required afterward. **Complete and merged.**
 - **2B — Pending signup account binding:** bind browser-persisted pending signup state to the intended account/session and prevent cross-account reuse on shared devices. **Complete and merged via PR #10.** The pending record is versioned and bound to the Supabase Auth user ID, is written only after successful signup, is read/cleared only for the matching signed-in user, and legacy/unbound state fails closed rather than being attributed to another account. A different account can neither auto-submit, pre-fill from, nor delete another user's pending signup state.
 - **2C — Stale async-response protection:** protect attendance, monthly statistics, dashboard, report-option, and Term/YTD rendering from older responses overwriting newer selections. **Complete and merged via PR #12.** The frontend uses per-surface monotonically increasing request serials plus captured selection keys so only the newest matching response may update UI/state. Report class/type/term/as-of changes also invalidate any in-flight rendered report/export state. No RPC, SQL, grant, RLS, DOM-ID, Science, or Netlify configuration change was required.
-- **2D — Auth URL/redirect re-verification:** re-check hosted Supabase Auth configuration before release; change configuration only if evidence shows a mismatch and only with separate approval.
+- **2D — Auth URL/redirect re-verification:** **Complete on closure branch; merge pending.** User-provided live Supabase Dashboard evidence on 13 September 2026 confirms Site URL `https://srlumapas.netlify.app/` and exactly one Redirect URL `https://srlumapas.netlify.app/**`. These values match the Phase 0B repository record and the current frontend contract, which sends `window.location.origin + '/'` for both signup verification and password recovery. No hosted Auth configuration mutation is required. Current Supabase guidance prefers exact production redirect paths where practical, but narrowing the existing working wildcard is a separate hardening decision rather than a Phase 2 correctness fix. Netlify preview-host redirects remain a later pilot/staging concern.
 
 **Phase 2B acceptance coverage:**
 - successful email-confirmation signup stores a versioned pending record bound to the created Auth user ID;
@@ -152,7 +152,15 @@ Phase 2 checkpoint split:
 - existing recovery, signup isolation, attendance/correction, admin, missing-register, CSV, February 3A, and Term 1 3A assertions remain mandatory;
 - no Supabase mutation or backend contract change is required.
 
-**Exit:** no known recovery, stale-response, or cross-account pending-signup correctness issue remains.
+**Phase 2D acceptance coverage:**
+- fresh hosted Supabase Dashboard evidence confirms Site URL `https://srlumapas.netlify.app/`;
+- fresh hosted Supabase Dashboard evidence confirms the sole Redirect URL `https://srlumapas.netlify.app/**`;
+- signup verification sends `emailRedirectTo` to the current browser origin root;
+- Forgot Password sends `redirectTo` to the current browser origin root;
+- the browser redirect contract is asserted dynamically against `window.location.origin + '/'`, so it is not coupled to the Playwright test host;
+- no Supabase/Auth setting, RPC, SQL, grant, RLS, Science, Netlify, DOM, production-data, or deployment mutation is required.
+
+**Exit:** no known recovery, stale-response, cross-account pending-signup, or hosted Auth redirect-configuration correctness issue remains in the cleaned build.
 
 ### Phase 3 — Frontend modularisation
 **Goal:** Remove the single-file frontend bottleneck without changing behaviour.
@@ -250,12 +258,13 @@ Recommended order:
 ### Immediate
 - Fresh Phase 0B evidence confirms authenticated direct DML is granted on `attendance.daily_registers` and `attendance.attendance_records` within RLS-accessible classes. This preserves class scoping but can bypass `attendance_save_register` completeness, correction-reason, and register correction-count safeguards. Preserve the live state in Phase 0B; redesign/revoke only in the later security phase with regression coverage.
 - Production migration history includes Attendance pupil-roster/pilot seed migrations. Their historical SQL must **not** be copied into the public repository because it may contain real pupil/attendance data. Record only sanitized version/name metadata and recreate the current structure from the live structural snapshot.
-- Phase 1 regression coverage is complete on cleanup `main`; 33 Chromium tests now cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, official 3A reporting invariants, password recovery, Phase 2B shared-device signup isolation, and six deterministic Phase 2C stale-response races.
+- Phase 1 regression coverage is complete on the Phase 2D closure branch; 34 Chromium tests now cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, official 3A reporting invariants, password recovery, Phase 2B shared-device signup isolation, six deterministic Phase 2C stale-response races, and the Phase 2D signup/password-reset redirect contract.
 - v0.7 live and v1.0 cleanup `main` have diverged by design.
 - The password-recovery routing race remains a known behaviour of the protected v0.7 production baseline; the Phase 2A fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
 - The shared-device pending-signup bug remains a known behaviour of the protected v0.7 production baseline; the Phase 2B fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
-- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A, Phase 2B, or Phase 2C; independently verify the live deployment boundary before any release decision.
+- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A, Phase 2B, Phase 2C, or Phase 2D; independently verify the live deployment boundary before any release decision.
 - Stale async-response overwrites are guarded on cleanup `main` by request-serial/selection-key checks with deterministic browser coverage. This does not constitute production promotion; v0.7 remains the protected live baseline until an explicitly approved release.
+- Fresh Phase 2D live Dashboard evidence confirms the production Site URL/Redirect URL pair still matches the frontend. The wildcard Redirect URL is broader than the exact root path the current frontend requests; leave it unchanged in Phase 2D because no correctness mismatch exists. Review any narrowing or preview-host additions separately with release/pilot scope.
 
 ### Medium-term
 - v1.0 single-file frontend is too large for safe continued growth.
@@ -299,24 +308,22 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 2C — STALE ASYNC-RESPONSE PROTECTION COMPLETE AND MERGED. Phase 2D has not started.
+**Current checkpoint:** Phase 2 — CORRECTNESS FIXES COMPLETE ON PHASE 2D CLOSURE BRANCH; PR #14 MERGE PENDING. Phase 3 has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Current verified cleanup `main`: `a8b73bc55cbdeea3b4edd6dace7f505a625f36d2`.
-- PR #12 — `Phase 2C: guard stale async responses` — merged with an expected-head SHA guard at exact verified head `de2499b2c981a681aaf3ce94e34577c80ea70f0a`.
-- Merge commit: `a8b73bc55cbdeea3b4edd6dace7f505a625f36d2`, signed/verified by GitHub, with parents `7f1d25307678800e9083c8e519faac60c9883726` and `de2499b2c981a681aaf3ce94e34577c80ea70f0a`.
-- Exact-head CI before merge was green: Phase 0A Integrity `34748002787`, Phase 0B Backend Contract `34748002795`, and Phase 1 Playwright `34748002818` with 33/33 Chromium tests, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities.
-- Phase 2C runtime scope is limited to latest-response guards inside `index.html`: attendance register, monthly statistics, admin dashboard, report options, and Term/YTD report loading. No new screen, DOM ID, RPC call, browser API wrapper, global interception, SQL migration, grant, RLS, Science, or `netlify.toml` change was introduced.
-- Each protected surface uses an independent monotonic request serial plus the captured selector key. This protects A → B → A navigation, where selector equality alone could allow an older response to appear current again.
-- Report class/type/term/as-of changes invalidate in-flight rendered report/export state. `loadReportOptions()` returns whether the requested class options were actually applied, preventing `loadPeriodReport()` from combining an old class ID with term controls populated for a newer class.
-- The synthetic Supabase Playwright harness supports named deferred RPC responses that tests explicitly release. Six race regressions cover attendance date ordering, attendance A → B → A ordering, monthly statistics, dashboard month, report options, and Term→YTD ordering without arbitrary sleeps.
-- Fresh read-only live Supabase re-verification before implementation confirmed the five Phase 2C RPC signatures/authorization modes were unchanged and the latest Attendance migration remained `20260906125521 attendance_v12_term_ytd_reporting`; no backend mutation was required.
-- Whole-file `index.html` diff review showed runtime changes limited to 47 additions / 6 deletions (53 changed lines), with no unrelated markup/style/reconstruction drift.
-- No explicit production promotion was performed. Netlify account-level auto-deploy linkage remains outside repository evidence and must be independently verified before release.
+- Current verified cleanup `main`: `ee962e793b267e63938133b95df8e36a8439f37a`.
+- Phase 2D branch: `cleanup/phase-2d-auth-redirect-verification`, created from that exact signed `main`.
+- PR #14 — `Phase 2D: verify Auth redirect configuration contract` — is draft/unmerged while the final two-file head is verified.
+- Fresh user-provided Supabase Dashboard evidence on 13 September 2026 confirms Site URL `https://srlumapas.netlify.app/` and sole Redirect URL `https://srlumapas.netlify.app/**`; no hosted Auth mutation is required.
+- Current frontend still requests `window.location.origin + '/'` for signup verification and password recovery, so the hosted configuration and browser contract agree.
+- Test-only checkpoint head `6829e9976d179bc8f6f4f370f3f0b790178969da` passed Phase 0A Integrity `34749695923`, Phase 0B Backend Contract `34749695938`, and Phase 1 Playwright `34749696089` with 34/34 Chromium tests in 14.7s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities.
+- The Phase 2D browser coverage adds one assertion to the existing signup verification flow and one focused Forgot Password test. Both derive the expected redirect dynamically from the current browser origin; no hard-coded test-host redirect is introduced.
+- Phase 2D makes no runtime, Supabase/Auth configuration, RPC, SQL, grant, RLS, Science, `netlify.toml`, DOM, production-data, or deployment change.
+- Exact-final-head CI after this roadmap update remains mandatory before merge.
 
-**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` as a production release.
+**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` or PR #14 as a production release.
 
-**Next action:** STOP before Phase 2D. The next engineering action, only after explicit user approval, is a fresh Phase 2D Auth URL/redirect re-verification from exact current `main`. Do not begin Phase 2D automatically.
+**Next action:** STOP before Phase 3. After PR #14 exact-final-head CI is green, require explicit user approval before merging Phase 2D closure. Do not begin frontend modularisation automatically.
 
 **Recommended thinking effort:** High.
 
@@ -353,3 +360,6 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** Phase 2C impact mapping completed from exact signed `main` `7f1d25307678800e9083c8e519faac60c9883726`. Confirmed real stale-response races in `attendance_load_register`, monthly statistics, admin dashboard, report options, and Term/YTD rendering, including a report-options race that could pair an old class ID with newly populated term controls. Fresh live read-only Supabase verification confirmed the five RPC signatures, SECURITY DEFINER modes/authorization checks, and latest Attendance migration `20260906125521 attendance_v12_term_ytd_reporting` remain unchanged; no backend mutation is required.
 - **13 Sep 2026:** User approved Phase 2C implementation. Created `cleanup/phase-2c-stale-response-guards` from exact `main` `7f1d25307678800e9083c8e519faac60c9883726`. Added per-surface request serial/selection guards and report-selection invalidation in `index.html`; extended the synthetic Supabase harness with deterministic named deferred RPC releases; added six Playwright race regressions covering attendance date, attendance A → B → A, monthly statistics, dashboard month, report options, and Term→YTD ordering. Immediate base-vs-branch diff review shows `index.html` limited to 47 additions / 6 deletions with no unrelated reconstruction drift. Exact-head CI and final PR review remain pending; do not merge or start Phase 2D until all gates are green and explicit approval is given.
 - **13 Sep 2026:** Phase 2C completed. PR #12 was re-verified at exact head `de2499b2c981a681aaf3ce94e34577c80ea70f0a` with exactly five changed files and all three required gates green (Phase 0A `34748002787`; Phase 0B `34748002795`; Playwright `34748002818`: 33/33 passed, Node `v22.23.2`, npm `10.9.8`, 0 vulnerabilities), then merged with an expected-head SHA guard. Verified signed new cleanup `main` at `a8b73bc55cbdeea3b4edd6dace7f505a625f36d2`, with parents `7f1d25307678800e9083c8e519faac60c9883726` and `de2499b2c981a681aaf3ce94e34577c80ea70f0a`. No backend, Science, `netlify.toml`, attendance-history/reporting-formula, production-data, or explicit production-promotion change was included. Phase 2D remains unstarted.
+- **13 Sep 2026:** Documentation closure PR #13 recorded the merged Phase 2C checkpoint and was merged into signed cleanup `main` at `ee962e793b267e63938133b95df8e36a8439f37a`. The merge was documentation-only; Phase 2D remained unstarted and no production promotion was performed.
+- **13 Sep 2026:** Phase 2D impact/evidence mapping completed from exact signed `main` `ee962e793b267e63938133b95df8e36a8439f37a`. Current frontend signup and password recovery both request `window.location.origin + '/'`. Fresh user-provided Supabase Dashboard evidence confirms hosted Site URL `https://srlumapas.netlify.app/` and sole Redirect URL `https://srlumapas.netlify.app/**`, matching the Phase 0B record and current frontend; no hosted Auth configuration mutation is required. Current Supabase guidance recommends exact production redirect paths where practical, but wildcard narrowing is classified as optional hardening rather than a correctness fix, and Netlify preview-host allow-list design is deferred to pilot/staging scope.
+- **13 Sep 2026:** User approved Phase 2D closure. Created `cleanup/phase-2d-auth-redirect-verification` from exact signed `main` `ee962e793b267e63938133b95df8e36a8439f37a` and opened draft PR #14. Test-only head `6829e9976d179bc8f6f4f370f3f0b790178969da` added two redirect-contract assertions with no runtime change and passed all required gates: Phase 0A `34749695923`, Phase 0B `34749695938`, and Playwright `34749696089` with 34/34 Chromium tests in 14.7s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. This roadmap update closes Phase 2 on the branch; exact-final-head CI remains mandatory before merge. Do not begin Phase 3 automatically.
