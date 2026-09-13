@@ -117,7 +117,7 @@ Required real browser scenarios:
 **Exit:** core workflows pass repeatably in automated browser tests.
 
 ### Phase 2 — Correctness fixes
-**Status:** In progress — Phase 2A password recovery and Phase 2B pending-signup account binding are complete and merged on cleanup `main`; Phase 2C/2D have not started.
+**Status:** In progress — Phase 2A password recovery and Phase 2B pending-signup account binding are complete and merged on cleanup `main`; Phase 2C is implemented on an isolated branch and is under verification; Phase 2D has not started.
 **Goal:** Fix known defects before structural cleanup.
 
 Actions:
@@ -129,7 +129,7 @@ Actions:
 Phase 2 checkpoint split:
 - **2A — Password recovery correctness:** recovery takes startup priority; confirmation is validated; password is updated; recovery session is signed out; normal sign-in is required afterward. **Complete and merged.**
 - **2B — Pending signup account binding:** bind browser-persisted pending signup state to the intended account/session and prevent cross-account reuse on shared devices. **Complete and merged via PR #10.** The pending record is versioned and bound to the Supabase Auth user ID, is written only after successful signup, is read/cleared only for the matching signed-in user, and legacy/unbound state fails closed rather than being attributed to another account. A different account can neither auto-submit, pre-fill from, nor delete another user's pending signup state.
-- **2C — Stale async-response protection:** protect attendance, monthly statistics, dashboard, report-option, and Term/YTD rendering from older responses overwriting newer selections.
+- **2C — Stale async-response protection:** protect attendance, monthly statistics, dashboard, report-option, and Term/YTD rendering from older responses overwriting newer selections. **Implemented on `cleanup/phase-2c-stale-response-guards`; exact-head verification/merge pending.** The frontend now uses per-surface monotonically increasing request serials plus captured selection keys so only the newest matching response may update UI/state. Report class/type/term/as-of changes also invalidate any in-flight rendered report/export state. No RPC, SQL, grant, RLS, DOM-ID, Science, or Netlify configuration change is required.
 - **2D — Auth URL/redirect re-verification:** re-check hosted Supabase Auth configuration before release; change configuration only if evidence shows a mismatch and only with separate approval.
 
 **Phase 2B acceptance coverage:**
@@ -141,6 +141,16 @@ Phase 2 checkpoint split:
 - an already-authorized different account does not delete another user's pending record;
 - legacy/unbound pending state is discarded rather than attributed to the signed-in user;
 - no Supabase RPC signature, grant, RLS, table, Science, or Netlify configuration change is required for Phase 2B.
+
+**Phase 2C acceptance coverage:**
+- an older attendance class/date response cannot replace a newer roster/banner/selection;
+- an A → B → A attendance sequence proves request serials reject the first A response even when its selection key becomes current again;
+- older monthly-statistics and admin-dashboard responses cannot replace newer class/month selections;
+- older report-option responses cannot repopulate terms for a class the user has already left;
+- changing report class/type/term/as-of invalidates rendered report/export state, and an older Term/YTD response cannot replace a newer report;
+- the synthetic Supabase browser harness can deterministically hold/release named RPC responses rather than relying on timing sleeps;
+- existing recovery, signup isolation, attendance/correction, admin, missing-register, CSV, February 3A, and Term 1 3A assertions remain mandatory;
+- no Supabase mutation or backend contract change is required.
 
 **Exit:** no known recovery, stale-response, or cross-account pending-signup correctness issue remains.
 
@@ -240,12 +250,12 @@ Recommended order:
 ### Immediate
 - Fresh Phase 0B evidence confirms authenticated direct DML is granted on `attendance.daily_registers` and `attendance.attendance_records` within RLS-accessible classes. This preserves class scoping but can bypass `attendance_save_register` completeness, correction-reason, and register correction-count safeguards. Preserve the live state in Phase 0B; redesign/revoke only in the later security phase with regression coverage.
 - Production migration history includes Attendance pupil-roster/pilot seed migrations. Their historical SQL must **not** be copied into the public repository because it may contain real pupil/attendance data. Record only sanitized version/name metadata and recreate the current structure from the live structural snapshot.
-- Phase 1 regression coverage is complete on `main`; 27 Chromium tests now cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, official 3A reporting invariants, password recovery, and Phase 2B shared-device signup isolation.
+- Phase 1 regression coverage is complete on `main`; 27 Chromium tests cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, official 3A reporting invariants, password recovery, and Phase 2B shared-device signup isolation. The Phase 2C branch adds six deterministic browser race regressions; exact-head full-suite verification is still pending.
 - v0.7 live and v1.0 cleanup `main` have diverged by design.
 - The password-recovery routing race remains a known behaviour of the protected v0.7 production baseline; the Phase 2A fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
 - The shared-device pending-signup bug remains a known behaviour of the protected v0.7 production baseline; the Phase 2B fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
-- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A or Phase 2B; independently verify the live deployment boundary before any release decision.
-- Potential stale async-response overwrites remain for Phase 2C.
+- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A, Phase 2B, or the Phase 2C branch; independently verify the live deployment boundary before any release decision.
+- Potential stale async-response overwrites are addressed on the Phase 2C branch with request-serial/selection-key guards and deterministic browser coverage, but remain an open cleanup risk until exact-head CI passes and the checkpoint is explicitly approved and merged.
 
 ### Medium-term
 - v1.0 single-file frontend is too large for safe continued growth.
@@ -289,23 +299,23 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 2B — PENDING SIGNUP ACCOUNT BINDING COMPLETE AND MERGED. Phase 2C/2D have not started.
+**Current checkpoint:** Phase 2C — STALE ASYNC-RESPONSE PROTECTION IMPLEMENTED ON ISOLATED BRANCH; EXACT-HEAD VERIFICATION AND MERGE PENDING. Phase 2D has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Current verified cleanup `main`: `41d88be698d1e7bd7cd0eaca1956323d2941290c`.
-- PR #10 — `Phase 2B: bind pending signup to account` — merged with expected-head guard on exact verified head `136ae88e46ff62a961d684cbb6ed92d705a13033`.
-- Merge commit: `41d88be698d1e7bd7cd0eaca1956323d2941290c`, with parents `235fdb4277e20be230ae012b0101176a68c15d5c` and `136ae88e46ff62a961d684cbb6ed92d705a13033`.
-- Exact-head CI immediately before merge was green: Phase 0A Integrity `34744925819`, Phase 0B Backend Contract `34744925796`, and Phase 1 Playwright `34744925879` with 27/27 Chromium tests, Node `v22.23.2`, and 0 npm vulnerabilities.
-- Phase 2B runtime scope is limited to pending-signup `localStorage` ownership in `index.html`; no new screen, DOM ID, browser-global wrapper, RPC, SQL, grant, RLS, or Science change is included.
-- Pending signup state is versioned as `{version: 2, userId, name, classId, role}` and is written only after successful signup returns an Auth user ID. It is auto-submitted, used to pre-fill the gate, or removed only for the matching account; valid state belonging to another account is preserved; legacy/unbound state fails closed.
-- Browser coverage proves same-account verification return, failed signup, cross-account auto-submit/pre-fill prevention, preservation during another account's manual gate submission, preservation for an authorized different account, and legacy unbound-state handling.
-- Fresh live Supabase inspection re-confirmed that `attendance_submit_teacher_request` binds its subject to `auth.uid()` and `attendance_teacher_status` returns `user_id`, so no backend authorization change was required.
-- No Supabase mutation, Science change, `netlify.toml` change, attendance-history/reporting change, production-data change, or explicit production promotion was performed.
-- Netlify account-level auto-deploy linkage remains outside repository evidence and must be independently verified before any release decision.
+- Current verified cleanup `main` and Phase 2C branch base: `7f1d25307678800e9083c8e519faac60c9883726`.
+- Phase 2B runtime merge is `41d88be698d1e7bd7cd0eaca1956323d2941290c`; documentation closure PR #11 subsequently moved Git `main` to `7f1d25307678800e9083c8e519faac60c9883726` without changing runtime behaviour.
+- Phase 2C branch: `cleanup/phase-2c-stale-response-guards`.
+- Phase 2C runtime scope is limited to latest-response guards inside `index.html`: attendance register, monthly statistics, admin dashboard, report options, and Term/YTD report loading. No new screen, DOM ID, RPC call, browser API wrapper, global interception, SQL migration, grant, RLS, Science, or `netlify.toml` change is introduced.
+- Each protected surface uses an independent monotonic request serial plus the captured selector key. This intentionally protects A → B → A navigation, where selector equality alone would allow the first A response to look current again.
+- Report class/type/term/as-of changes invalidate any in-flight rendered report/export state. `loadReportOptions()` now returns whether the requested class options were actually applied, preventing `loadPeriodReport()` from combining an old class ID with term controls populated for a newer class.
+- The synthetic Supabase Playwright harness now supports named deferred RPC responses that tests explicitly release. Six new browser regressions exercise attendance date ordering, attendance A → B → A ordering, monthly statistics, dashboard month, report options, and Term→YTD report ordering without arbitrary sleeps.
+- Fresh read-only live Supabase re-verification confirmed the five Phase 2C RPC signatures/authorization modes remain unchanged and the latest Attendance migration remains `20260906125521 attendance_v12_term_ytd_reporting`; Phase 2C therefore requires no backend mutation.
+- Whole-file `index.html` reconstruction was immediately diff-reviewed against exact base: runtime diff is limited to 47 additions / 6 deletions (53 changed lines), with no unintended markup/style/reconstruction drift found.
+- No explicit production promotion is included. Netlify account-level auto-deploy linkage remains outside repository evidence and must be independently verified before release.
 
-**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` as a production release.
+**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` or the Phase 2C branch as a production release.
 
-**Next action:** STOP before Phase 2C. The next engineering action is a fresh Phase 2C impact-map/re-verification from exact `main` `41d88be698d1e7bd7cd0eaca1956323d2941290c`, followed by explicit user approval before any Phase 2C implementation. Do not begin Phase 2C automatically.
+**Next action:** Run exact-current-head Phase 0A Integrity, Phase 0B Backend Contract, and the full Playwright suite; inspect the final five-file diff, test logs, comments/reviews, rollback boundary, and exact PR head; then STOP at the Phase 2C merge gate for explicit user approval. Do not begin Phase 2D automatically.
 
 **Recommended thinking effort:** High.
 
@@ -338,3 +348,6 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** Phase 2B impact mapping and fresh live RPC verification completed from exact `main` `235fdb4277e20be230ae012b0101176a68c15d5c`. Confirmed that unbound pending-signup `localStorage` could be submitted, pre-filled, or deleted by a different account on a shared browser. Live `attendance_submit_teacher_request` remains bound internally to `auth.uid()` and `attendance_teacher_status` returns `user_id`, so the checkpoint is frontend/test-only with no backend authorization change required.
 - **13 Sep 2026:** Phase 2B implemented on `cleanup/phase-2b-pending-signup-binding`: pending signup state is versioned and bound to Auth user ID, written only after successful signup, consumed/cleared only for the matching account, and legacy unbound state fails closed. Browser tests were expanded for same-account verification return, failed signup, cross-account isolation, preservation during manual gate submission, authorized-account isolation, and legacy-state handling. Whole-file `index.html` reconstruction drift was caught during diff review and corrected before PR/CI. Verification remains pending; do not merge or start Phase 2C until exact-head gates are green and explicit approval is given.
 - **13 Sep 2026:** Phase 2B completed. PR #10 was re-verified at exact head `136ae88e46ff62a961d684cbb6ed92d705a13033` with exactly three changed files and all three required CI gates green (Phase 0A `34744925819`, Phase 0B `34744925796`, Playwright `34744925879`: 27/27 passed, 0 npm vulnerabilities), then merged with an expected-head SHA guard. Verified signed new cleanup `main` at `41d88be698d1e7bd7cd0eaca1956323d2941290c`, with parents `235fdb4277e20be230ae012b0101176a68c15d5c` and `136ae88e46ff62a961d684cbb6ed92d705a13033`. No backend, Science, `netlify.toml`, attendance-history/reporting, production-data, or explicit production-promotion change was included. Phase 2C/2D remain unstarted.
+- **13 Sep 2026:** Documentation closure PR #11 recorded the merged Phase 2B checkpoint and was merged into `main` at `7f1d25307678800e9083c8e519faac60c9883726`. The merge was documentation-only; Phase 2B runtime remained unchanged and Phase 2C/2D remained unstarted.
+- **13 Sep 2026:** Phase 2C impact mapping completed from exact signed `main` `7f1d25307678800e9083c8e519faac60c9883726`. Confirmed real stale-response races in `attendance_load_register`, monthly statistics, admin dashboard, report options, and Term/YTD rendering, including a report-options race that could pair an old class ID with newly populated term controls. Fresh live read-only Supabase verification confirmed the five RPC signatures, SECURITY DEFINER modes/authorization checks, and latest Attendance migration `20260906125521 attendance_v12_term_ytd_reporting` remain unchanged; no backend mutation is required.
+- **13 Sep 2026:** User approved Phase 2C implementation. Created `cleanup/phase-2c-stale-response-guards` from exact `main` `7f1d25307678800e9083c8e519faac60c9883726`. Added per-surface request serial/selection guards and report-selection invalidation in `index.html`; extended the synthetic Supabase harness with deterministic named deferred RPC releases; added six Playwright race regressions covering attendance date, attendance A → B → A, monthly statistics, dashboard month, report options, and Term→YTD ordering. Immediate base-vs-branch diff review shows `index.html` limited to 47 additions / 6 deletions with no unrelated reconstruction drift. Exact-head CI and final PR review remain pending; do not merge or start Phase 2D until all gates are green and explicit approval is given.

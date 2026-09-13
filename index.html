@@ -448,11 +448,31 @@ const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:fal
 let passwordRecoveryActive=initialRecoveryLink;
 const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
 const PENDING_SIGNUP_VERSION=2;
+const requestSerial={register:0,monthlyStats:0,adminDashboard:0,reportOptions:0,periodReport:0};
 const routineOptions=[
   ['present','Present'],['absent','Absent'],['late','Late'],['permission','Permission'],
   ['SS','SEN / Special'],['T','Transfer Out'],['D','Deferred'],['X','Deceased'],
   ['SP','Student Pass'],['W','Withdrawn'],['Q','Quit']
 ];
+
+function beginRequest(kind){requestSerial[kind]+=1;return requestSerial[kind];}
+function isLatestRequest(kind,serial){return requestSerial[kind]===serial;}
+function periodReportSelectionKey(){
+  const type=$('reportType').value;
+  return [
+    $('reportClassSelect').value,
+    type,
+    type==='term'?$('reportTermSelect').value:'',
+    type==='ytd'?$('reportAsOf').value:''
+  ].join('|');
+}
+function invalidatePeriodReport(){
+  requestSerial.periodReport+=1;
+  state.periodReport=null;
+  renderPeriodReport();
+  $('loadReportBtn').disabled=false;
+  $('exportReportBtn').disabled=true;
+}
 
 function bruneiToday(){
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Brunei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
@@ -660,8 +680,10 @@ async function enterApp(){
 async function loadRegister(){
   const classId=$('classSelect').value,date=$('dateInput').value;
   if(!classId||!date)return;
+  const serial=beginRequest('register'),selectionKey=classId+'|'+date;
   setBusy(true);setBanner('Loading attendance…','info');$('studentList').innerHTML='';
   const {data,error}=await sb.rpc('attendance_load_register',{p_class_id:classId,p_date:date});
+  if(!isLatestRequest('register',serial)||($('classSelect').value+'|'+$('dateInput').value)!==selectionKey)return;
   setBusy(false);
   if(error){state.register=null;state.rows=[];setBanner(error.message,'warn');render();return;}
   state.register=data;
@@ -837,8 +859,10 @@ function shortDay(v){if(!v)return'';const [y,m,d]=v.split('-').map(Number);retur
 function setStatsBanner(text,type='info'){const el=$('statsBanner');el.textContent=text;el.className='banner '+type;}
 async function loadMonthlyStats(){
   const classId=$('statsClassSelect').value,month=$('statsMonth').value;if(!classId||!month)return;
+  const serial=beginRequest('monthlyStats'),selectionKey=classId+'|'+month;
   $('refreshStatsBtn').disabled=true;setStatsBanner('Loading monthly statistics…','info');
   const {data,error}=await sb.rpc('attendance_monthly_class_stats',{p_class_id:classId,p_month:month+'-01'});
+  if(!isLatestRequest('monthlyStats',serial)||($('statsClassSelect').value+'|'+$('statsMonth').value)!==selectionKey)return;
   $('refreshStatsBtn').disabled=false;
   if(error){state.monthlyStats=null;setStatsBanner(error.message,'warn');renderMonthlyStats();return;}
   state.monthlyStats=data;renderMonthlyStats();
@@ -867,8 +891,10 @@ function renderMonthlyStats(){
 function setDashboardBanner(text,type='info'){const el=$('dashboardBanner');el.textContent=text;el.className='banner '+type;}
 async function loadAdminDashboard(){
   const sid=schoolId(),month=$('dashboardMonth').value;if(!sid||!month)return;
+  const serial=beginRequest('adminDashboard'),selectionKey=sid+'|'+month;
   $('refreshDashboardBtn').disabled=true;setDashboardBanner('Loading school attendance dashboard…','info');
   const {data,error}=await sb.rpc('attendance_admin_school_dashboard',{p_school_id:sid,p_month:month+'-01'});
+  if(!isLatestRequest('adminDashboard',serial)||(schoolId()+'|'+$('dashboardMonth').value)!==selectionKey)return;
   $('refreshDashboardBtn').disabled=false;
   if(error){state.adminDashboard=null;setDashboardBanner(error.message,'warn');renderAdminDashboard();return;}
   state.adminDashboard=data;renderAdminDashboard();
@@ -912,27 +938,40 @@ function syncReportTypeUI(){
   $('reportAsOfField').classList.toggle('hidden',term);
 }
 async function loadReportOptions(){
-  const classId=$('reportClassSelect').value;if(!classId)return;
-  state.periodReport=null;renderPeriodReport();
+  const classId=$('reportClassSelect').value;if(!classId)return false;
+  const serial=beginRequest('reportOptions');
+  state.reportOptions=null;
+  $('reportTermSelect').innerHTML='';
+  invalidatePeriodReport();
   setReportBanner('Loading reporting periods…','info');
   const {data,error}=await sb.rpc('attendance_class_report_options',{p_class_id:classId});
-  if(error){state.reportOptions=null;setReportBanner(error.message,'warn');return;}
+  if(!isLatestRequest('reportOptions',serial)||$('reportClassSelect').value!==classId)return false;
+  if(error){state.reportOptions=null;setReportBanner(error.message,'warn');return false;}
   state.reportOptions=data;
   const terms=data?.terms||[],sel=$('reportTermSelect');
   sel.innerHTML=terms.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.term_name)+' · '+displayDate(t.start_date)+'–'+displayDate(t.end_date)+'</option>').join('');
   const today=bruneiToday(),current=terms.find(t=>today>=t.start_date&&today<=t.end_date)||terms[terms.length-1];
   if(current)sel.value=current.id;
   syncReportTypeUI();setReportBanner('Choose Term or YTD, then load the report.','info');
+  return true;
 }
 async function loadPeriodReport(){
   const classId=$('reportClassSelect').value,type=$('reportType').value;
   if(!classId)return;
-  if(!state.reportOptions||state.reportOptions.class?.id!==classId)await loadReportOptions();
+  if(!state.reportOptions||state.reportOptions.class?.id!==classId){
+    const optionsReady=await loadReportOptions();
+    if(!optionsReady||$('reportClassSelect').value!==classId||$('reportType').value!==type)return;
+  }
   const termId=type==='term'?$('reportTermSelect').value:null;
+  const asOfDate=type==='ytd'?$('reportAsOf').value:null;
   if(type==='term'&&!termId){setReportBanner('Choose a term.','warn');return;}
+  const selectionKey=[classId,type,termId||'',asOfDate||''].join('|');
+  const serial=beginRequest('periodReport');
   $('loadReportBtn').disabled=true;$('exportReportBtn').disabled=true;setReportBanner('Loading report…','info');
-  const args={p_class_id:classId,p_period_type:type,p_term_id:termId||null,p_as_of_date:type==='ytd'?$('reportAsOf').value:null};
+  const args={p_class_id:classId,p_period_type:type,p_term_id:termId||null,p_as_of_date:asOfDate};
   const {data,error}=await sb.rpc('attendance_class_period_report',args);
+  if(!isLatestRequest('periodReport',serial))return;
+  if(periodReportSelectionKey()!==selectionKey){$('loadReportBtn').disabled=false;$('exportReportBtn').disabled=true;return;}
   $('loadReportBtn').disabled=false;
   if(error){state.periodReport=null;setReportBanner(error.message,'warn');renderPeriodReport();return;}
   state.periodReport=data;renderPeriodReport();$('exportReportBtn').disabled=false;
@@ -1169,7 +1208,9 @@ $('refreshDashboardBtn').addEventListener('click',loadAdminDashboard);
 $('statisticsTabBtn').addEventListener('click',()=>switchPanel('statistics'));
 $('reportsTabBtn').addEventListener('click',()=>switchPanel('reports'));
 $('reportClassSelect').addEventListener('change',loadReportOptions);
-$('reportType').addEventListener('change',syncReportTypeUI);
+$('reportType').addEventListener('change',()=>{syncReportTypeUI();invalidatePeriodReport();});
+$('reportTermSelect').addEventListener('change',invalidatePeriodReport);
+$('reportAsOf').addEventListener('change',invalidatePeriodReport);
 $('loadReportBtn').addEventListener('click',loadPeriodReport);
 $('exportReportBtn').addEventListener('click',exportPeriodReport);
 $('refreshStatsBtn').addEventListener('click',loadMonthlyStats);
