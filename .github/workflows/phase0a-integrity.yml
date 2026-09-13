@@ -23,6 +23,7 @@ jobs:
           set -euo pipefail
           test -f index.html
           test -f assets/js/main.js
+          test -f assets/js/supabase-client.js
           test -f netlify.toml
           test -f README.txt
 
@@ -34,35 +35,79 @@ jobs:
           git show c578b4240a2bd9899db602fa818bda99bd6ff3cd:index.html > /tmp/attendance-v1-frozen.html
           echo "199d93f81c1cdb1742544f0dbde3f9da2e264b9d2dc16e4ce93cd53140387086  /tmp/attendance-v1-frozen.html" | sha256sum --check --strict
 
-      - name: Verify Phase 3A external-module extraction equivalence
+      - name: Verify historical Phase 3A external-module extraction
         shell: python
         run: |
-          from pathlib import Path
           import re
           import subprocess
 
-          base_sha = "88fffe819a4b287bd05c48c0933ebf14c7d913d2"
-          subprocess.run(["git", "cat-file", "-e", f"{base_sha}^{{commit}}"], check=True)
-          before = subprocess.check_output(["git", "show", f"{base_sha}:index.html"], text=True)
+          pre3_sha = "88fffe819a4b287bd05c48c0933ebf14c7d913d2"
+          phase3a_sha = "0526944153c4176d47ea1a2b0891e3ed56fe479c"
+          for sha in (pre3_sha, phase3a_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
 
+          before = subprocess.check_output(["git", "show", f"{pre3_sha}:index.html"], text=True)
           matches = list(re.finditer(r'<script\s+type="module"[^>]*>\n(.*?)</script>', before, flags=re.S | re.I))
           if len(matches) != 1:
               raise SystemExit(f"Expected exactly one pre-Phase-3 inline ES module, found {len(matches)}")
 
           match = matches[0]
           expected_module = match.group(1)
-          current_module = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_module != expected_module:
-              raise SystemExit("assets/js/main.js is not byte-for-byte equivalent to the pre-Phase-3 inline module")
+          phase3a_module = subprocess.check_output(["git", "show", f"{phase3a_sha}:assets/js/main.js"], text=True)
+          if phase3a_module != expected_module:
+              raise SystemExit("Historical Phase 3A main.js is not byte-for-byte equivalent to the pre-Phase-3 inline module")
 
           loader = '<script type="module" src="./assets/js/main.js"></script>'
           expected_html = before[:match.start()] + loader + before[match.end():]
+          phase3a_html = subprocess.check_output(["git", "show", f"{phase3a_sha}:index.html"], text=True)
+          if phase3a_html != expected_html:
+              raise SystemExit("Historical Phase 3A index.html contains changes beyond the exact external-module extraction")
+
+      - name: Verify exact Phase 3B1 Supabase client split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3a_sha = "0526944153c4176d47ea1a2b0891e3ed56fe479c"
+          before_main = subprocess.check_output(["git", "show", f"{phase3a_sha}:assets/js/main.js"], text=True)
+
+          old_import = "import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';\n"
+          new_import = "import { createAttendanceClient } from './supabase-client.js';\n"
+          old_client = "const sb=createClient(\n  'https://rojetehazryfpcxlwtbi.supabase.co',\n  'sb_publishable_gc1-vVGBZOSgw32SCJumyw__vm0e3Jd',\n  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}\n);\n"
+          new_client = "const sb=createAttendanceClient();\n"
+          if before_main.count(old_import) != 1 or before_main.count(old_client) != 1:
+              raise SystemExit("Historical Phase 3A source does not contain the expected unique Supabase client blocks")
+
+          expected_main = before_main.replace(old_import, new_import, 1).replace(old_client, new_client, 1)
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B1 client extraction")
+
+          expected_client = "\n".join([
+              "import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';",
+              "",
+              "export function createAttendanceClient(){",
+              "  return createClient(",
+              "    'https://rojetehazryfpcxlwtbi.supabase.co',",
+              "    'sb_publishable_gc1-vVGBZOSgw32SCJumyw__vm0e3Jd',",
+              "    {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}",
+              "  );",
+              "}",
+              ""
+          ])
+          current_client = Path("assets/js/supabase-client.js").read_text(encoding="utf-8")
+          if current_client != expected_client:
+              raise SystemExit("assets/js/supabase-client.js is not the exact approved Phase 3B1 client factory")
+
+          phase3a_html = subprocess.check_output(["git", "show", f"{phase3a_sha}:index.html"], text=True)
           current_html = Path("index.html").read_text(encoding="utf-8")
-          if current_html != expected_html:
-              raise SystemExit("index.html contains changes beyond the exact Phase 3A module extraction")
+          if current_html != phase3a_html:
+              raise SystemExit("Phase 3B1 must not change index.html")
 
       - name: Check current JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
           node --check assets/js/main.js
+          node --check assets/js/supabase-client.js
