@@ -165,9 +165,10 @@ test('password recovery rejects mismatched confirmation', async ({ page }) => {
   await harness.expectNoProductionRequests();
 });
 
-test('successful recovery signs out recovery session and returns to login', async ({ page }) => {
+test('successful recovery rejects old password, accepts new password, and preserves teacher scope', async ({ page }) => {
   const harness = await installHarness(page, {
     session: null,
+    authPassword: 'old-password-1',
     rpc: {
       attendance_teacher_status: { authorized: true, signup_request: null },
       attendance_bootstrap: bootstrapFixture(),
@@ -188,11 +189,36 @@ test('successful recovery signs out recovery session and returns to login', asyn
   await expect(page.locator('#appView')).toBeHidden();
   await expect(page.locator('#loginMsg')).toContainText('Sign in with your new password');
 
-  const calls = await harness.calls();
+  let calls = await harness.calls();
   expect(calls.auth.filter(call => call.method === 'updateUser')).toEqual([
     { method: 'updateUser', payload: { password: 'new-password-1' } }
   ]);
   expect(calls.auth.filter(call => call.method === 'signOut')).toHaveLength(1);
   expect(calls.rpc).toEqual([]);
+
+  await page.locator('#email').fill('teacher@example.test');
+  await page.locator('#password').fill('old-password-1');
+  await page.locator('#loginBtn').click();
+  await expect(page.locator('#loginView')).toBeVisible();
+  await expect(page.locator('#loginMsg')).toContainText('Invalid login credentials');
+  await expect(page.locator('#appView')).toBeHidden();
+
+  await page.locator('#password').fill('new-password-1');
+  await page.locator('#loginBtn').click();
+  await expect(page.locator('#appView')).toBeVisible();
+  await expect(page.locator('#classSelect')).toHaveValue('class-3a');
+  await expect(page.locator('#classSelect option')).toHaveCount(1);
+  await expect(page.locator('#dashboardTabBtn')).toHaveClass(/hidden/);
+
+  calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'signInWithPassword')).toEqual([
+    { method: 'signInWithPassword', payload: { email: 'teacher@example.test', password: 'old-password-1' } },
+    { method: 'signInWithPassword', payload: { email: 'teacher@example.test', password: 'new-password-1' } }
+  ]);
+  expect(calls.rpc.map(call => call.name)).toEqual([
+    'attendance_teacher_status',
+    'attendance_bootstrap',
+    'attendance_load_register'
+  ]);
   await harness.expectNoProductionRequests();
 });
