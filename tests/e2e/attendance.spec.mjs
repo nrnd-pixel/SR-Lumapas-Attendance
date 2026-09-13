@@ -1,5 +1,22 @@
 import { test, expect } from '@playwright/test';
-import { openAuthorized, registerFixture } from './harness.mjs';
+import { openAuthorized, registerFixture, syntheticClass } from './harness.mjs';
+
+const raceClasses = [
+  syntheticClass(),
+  syntheticClass({ id: 'class-3b', class_code: '3B', class_name: 'Year 3B' })
+];
+
+function namedRegister({ classId = 'class-3a', classCode = '3A', className = 'Year 3A', date = '2026-02-02', prefix }) {
+  const base = registerFixture({ date });
+  return {
+    ...base,
+    class: syntheticClass({ id: classId, class_code: classCode, class_name: className }),
+    students: base.students.map((student, index) => ({
+      ...student,
+      full_name: `${prefix} ${index + 1}`
+    }))
+  };
+}
 
 test('Mark All Present, edit an exception, and save the first register', async ({ page }) => {
   const savedAfter = registerFixture({
@@ -132,4 +149,79 @@ test('mobile attendance view has no horizontal overflow', async ({ browser }) =>
   await harness.expectNoProductionRequests();
 
   await context.close();
+});
+
+test('newer attendance date response wins when an older response finishes last', async ({ page }) => {
+  const initial = namedRegister({ prefix: 'Initial 3A' });
+  const oldDate = namedRegister({
+    classId: 'class-3b', classCode: '3B', className: 'Year 3B',
+    date: '2026-02-02', prefix: 'Old 3B Date'
+  });
+  const newest = namedRegister({
+    classId: 'class-3b', classCode: '3B', className: 'Year 3B',
+    date: '2026-02-03', prefix: 'Newest 3B Date'
+  });
+  const harness = await openAuthorized(page, {
+    classes: raceClasses,
+    register: initial,
+    registerSequence: [
+      initial,
+      { __defer: 'attendance-old-date', response: oldDate },
+      newest
+    ]
+  });
+
+  await page.locator('#classSelect').selectOption('class-3b');
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('attendance-old-date');
+
+  await page.locator('#dateInput').evaluate(element => {
+    element.value = '2026-02-03';
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(page.locator('#studentList .student-name').first()).toContainText('Newest 3B Date 1');
+  await expect(page.locator('#dateInput')).toHaveValue('2026-02-03');
+
+  await harness.releaseRpc('attendance-old-date');
+  await expect(page.locator('#studentList .student-name').first()).toContainText('Newest 3B Date 1');
+  await expect(page.locator('#dateInput')).toHaveValue('2026-02-03');
+
+  const calls = await harness.calls();
+  const loads = calls.rpc.filter(call => call.name === 'attendance_load_register');
+  expect(loads).toHaveLength(3);
+  expect(loads[1].args).toEqual({ p_class_id: 'class-3b', p_date: '2026-02-02' });
+  expect(loads[2].args).toEqual({ p_class_id: 'class-3b', p_date: '2026-02-03' });
+  await harness.expectNoProductionRequests();
+});
+
+test('attendance request serial protects an A to B to A selection sequence', async ({ page }) => {
+  const initial = namedRegister({ prefix: 'Initial A' });
+  const oldA = namedRegister({ prefix: 'Old A' });
+  const b = namedRegister({
+    classId: 'class-3b', classCode: '3B', className: 'Year 3B', prefix: 'Current B'
+  });
+  const newestA = namedRegister({ prefix: 'Newest A' });
+  const harness = await openAuthorized(page, {
+    classes: raceClasses,
+    register: initial,
+    registerSequence: [
+      initial,
+      { __defer: 'attendance-old-a', response: oldA },
+      b,
+      newestA
+    ]
+  });
+
+  await page.locator('#reloadBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('attendance-old-a');
+
+  await page.locator('#classSelect').selectOption('class-3b');
+  await expect(page.locator('#studentList .student-name').first()).toContainText('Current B 1');
+
+  await page.locator('#classSelect').selectOption('class-3a');
+  await expect(page.locator('#studentList .student-name').first()).toContainText('Newest A 1');
+
+  await harness.releaseRpc('attendance-old-a');
+  await expect(page.locator('#studentList .student-name').first()).toContainText('Newest A 1');
+  await expect(page.locator('#classSelect')).toHaveValue('class-3a');
+  await harness.expectNoProductionRequests();
 });
