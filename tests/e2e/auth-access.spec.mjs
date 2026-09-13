@@ -123,12 +123,10 @@ test('signup returns from email verification into Pending Approval', async ({ pa
 });
 
 test('password recovery link stays on Set New Password', async ({ page }) => {
-  test.fail(true, 'Known Phase 2 bug: PASSWORD_RECOVERY loses the startup routing race.');
-
   const harness = await installHarness(page, {
     session: { user: { email: 'teacher@example.test' } },
     authEvents: [
-      { event: 'PASSWORD_RECOVERY', microtask: true, session: { user: { email: 'teacher@example.test' } } }
+      { event: 'PASSWORD_RECOVERY', delay: 25, session: { user: { email: 'teacher@example.test' } } }
     ],
     rpc: {
       attendance_teacher_status: { authorized: true, signup_request: null },
@@ -137,10 +135,14 @@ test('password recovery link stays on Set New Password', async ({ page }) => {
     }
   });
 
-  await page.goto('/');
-  await page.waitForTimeout(100);
+  await page.goto('/#access_token=synthetic&type=recovery');
+  await expect(page.locator('#recoveryView')).toBeVisible();
+  await page.waitForTimeout(75);
   await expect(page.locator('#recoveryView')).toBeVisible();
   await expect(page.locator('#appView')).toBeHidden();
+
+  const calls = await harness.calls();
+  expect(calls.rpc).toEqual([]);
   await harness.expectNoProductionRequests();
 });
 
@@ -164,8 +166,6 @@ test('password recovery rejects mismatched confirmation', async ({ page }) => {
 });
 
 test('successful recovery signs out recovery session and returns to login', async ({ page }) => {
-  test.fail(true, 'Known Phase 2 bug: successful recovery currently routes into Attendance instead of signing out.');
-
   const harness = await installHarness(page, {
     session: null,
     rpc: {
@@ -183,12 +183,16 @@ test('successful recovery signs out recovery session and returns to login', asyn
   await page.locator('#newPassword').fill('new-password-1');
   await page.locator('#confirmPassword').fill('new-password-1');
   await page.locator('#recoveryBtn').click();
-  await page.waitForTimeout(900);
 
-  const calls = await harness.calls();
-  expect(calls.auth.some(call => call.method === 'updateUser')).toBe(true);
-  expect(calls.auth.some(call => call.method === 'signOut')).toBe(true);
   await expect(page.locator('#loginView')).toBeVisible();
   await expect(page.locator('#appView')).toBeHidden();
+  await expect(page.locator('#loginMsg')).toContainText('Sign in with your new password');
+
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'updateUser')).toEqual([
+    { method: 'updateUser', payload: { password: 'new-password-1' } }
+  ]);
+  expect(calls.auth.filter(call => call.method === 'signOut')).toHaveLength(1);
+  expect(calls.rpc).toEqual([]);
   await harness.expectNoProductionRequests();
 });
