@@ -117,7 +117,7 @@ Required real browser scenarios:
 **Exit:** core workflows pass repeatably in automated browser tests.
 
 ### Phase 2 — Correctness fixes
-**Status:** In progress — Phase 2A password recovery is complete and merged on cleanup `main`; Phase 2B is implemented on an isolated branch and is under verification; Phase 2C/2D have not started.
+**Status:** In progress — Phase 2A password recovery and Phase 2B pending-signup account binding are complete and merged on cleanup `main`; Phase 2C/2D have not started.
 **Goal:** Fix known defects before structural cleanup.
 
 Actions:
@@ -128,7 +128,7 @@ Actions:
 
 Phase 2 checkpoint split:
 - **2A — Password recovery correctness:** recovery takes startup priority; confirmation is validated; password is updated; recovery session is signed out; normal sign-in is required afterward. **Complete and merged.**
-- **2B — Pending signup account binding:** bind browser-persisted pending signup state to the intended account/session and prevent cross-account reuse on shared devices. **Implemented on `cleanup/phase-2b-pending-signup-binding`; verification/merge pending.** The pending record is versioned and bound to the Supabase Auth user ID, is written only after successful signup, is read/cleared only for the matching signed-in user, and legacy/unbound state fails closed rather than being attributed to another account. A different account must neither auto-submit, pre-fill from, nor delete another user's pending signup state.
+- **2B — Pending signup account binding:** bind browser-persisted pending signup state to the intended account/session and prevent cross-account reuse on shared devices. **Complete and merged via PR #10.** The pending record is versioned and bound to the Supabase Auth user ID, is written only after successful signup, is read/cleared only for the matching signed-in user, and legacy/unbound state fails closed rather than being attributed to another account. A different account can neither auto-submit, pre-fill from, nor delete another user's pending signup state.
 - **2C — Stale async-response protection:** protect attendance, monthly statistics, dashboard, report-option, and Term/YTD rendering from older responses overwriting newer selections.
 - **2D — Auth URL/redirect re-verification:** re-check hosted Supabase Auth configuration before release; change configuration only if evidence shows a mismatch and only with separate approval.
 
@@ -240,12 +240,12 @@ Recommended order:
 ### Immediate
 - Fresh Phase 0B evidence confirms authenticated direct DML is granted on `attendance.daily_registers` and `attendance.attendance_records` within RLS-accessible classes. This preserves class scoping but can bypass `attendance_save_register` completeness, correction-reason, and register correction-count safeguards. Preserve the live state in Phase 0B; redesign/revoke only in the later security phase with regression coverage.
 - Production migration history includes Attendance pupil-roster/pilot seed migrations. Their historical SQL must **not** be copied into the public repository because it may contain real pupil/attendance data. Record only sanitized version/name metadata and recreate the current structure from the live structural snapshot.
-- Phase 1 regression coverage is complete on `main`; 23 Chromium tests cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, and the official 3A reporting invariants. Phase 2A additionally makes the former recovery expected failures mandatory passing assertions and covers post-reset old/new-password plus teacher-scope behaviour through the synthetic Auth harness.
+- Phase 1 regression coverage is complete on `main`; 27 Chromium tests now cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, official 3A reporting invariants, password recovery, and Phase 2B shared-device signup isolation.
 - v0.7 live and v1.0 cleanup `main` have diverged by design.
-- The password-recovery routing race remains a known behaviour of the protected v0.7 production baseline; the Phase 2A fix is now merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
-- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A; independently verify the live deployment boundary before any release decision.
+- The password-recovery routing race remains a known behaviour of the protected v0.7 production baseline; the Phase 2A fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
+- The shared-device pending-signup bug remains a known behaviour of the protected v0.7 production baseline; the Phase 2B fix is merged into cleanup `main` but must not be treated as production until an explicitly approved promotion.
+- Netlify account-level auto-deploy linkage is not represented in repository files. No explicit production-promotion action was performed as part of Phase 2A or Phase 2B; independently verify the live deployment boundary before any release decision.
 - Potential stale async-response overwrites remain for Phase 2C.
-- The shared-device pending-signup bug is addressed on the Phase 2B branch by user-ID-bound browser state and new browser regression coverage, but remains an open cleanup risk until exact-head CI passes and the checkpoint is explicitly approved and merged.
 
 ### Medium-term
 - v1.0 single-file frontend is too large for safe continued growth.
@@ -289,24 +289,23 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 2B — PENDING SIGNUP ACCOUNT BINDING IMPLEMENTED ON ISOLATED BRANCH; VERIFICATION AND MERGE PENDING. Phase 2C/2D have not started.
+**Current checkpoint:** Phase 2B — PENDING SIGNUP ACCOUNT BINDING COMPLETE AND MERGED. Phase 2C/2D have not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Current verified cleanup `main` and Phase 2B branch base: `235fdb4277e20be230ae012b0101176a68c15d5c`.
-- Phase 2A runtime merge remains `f4f141bb46890715eb0c35a692c4bad4e7dd969c`; documentation closure PR #9 subsequently moved `main` to `235fdb4277e20be230ae012b0101176a68c15d5c` without changing runtime behaviour.
-- Phase 2B branch: `cleanup/phase-2b-pending-signup-binding`.
-- Phase 2B runtime scope is limited to pending-signup `localStorage` ownership in `index.html`; no new screen, DOM ID, browser-global wrapper, or RPC call is introduced.
-- Pending signup state is now versioned as `{version: 2, userId, name, classId, role}` and is written only after successful `signUp()` returns an Auth user ID. Email is not duplicated into local storage.
-- Pending state is auto-submitted, used to pre-fill the teacher gate, or removed only when its `userId` matches `attendance_teacher_status.user_id`. A valid pending record belonging to another account is left untouched. Legacy/malformed unbound state is discarded rather than guessed.
-- Fresh live Supabase inspection re-confirmed that `attendance_submit_teacher_request` derives the subject from `auth.uid()`, `attendance_teacher_status` returns `user_id`, and neither `attendance.teacher_signup_requests` nor `attendance_private.teacher_access_audit` grants authenticated direct table access. Phase 2B therefore requires no backend migration, RPC signature, grant, or RLS change.
-- Browser coverage has been expanded for same-account verification return, failed signup, different-account auto-submit/pre-fill prevention, different-account preservation during manual gate submission, authorized-account preservation, and legacy unbound-state fail-closed handling. Exact-head CI results are intentionally recorded in the PR/checks rather than hard-coded here to avoid recursive documentation-only head churn.
-- The Phase 2A browser credential-transition assertion remains synthetic by design and does not mutate or expose a real teacher password. Hosted Supabase Auth URL/redirect configuration remains a separate Phase 2D/release verification concern.
-- One non-functional `index.html` diff artifact from the Phase 2A correction-confirmation representation remains part of cleanup `main` relative to the original frozen v1.0 source; Phase 2B does not intentionally change its runtime semantics. During Phase 2B implementation, an intermediate whole-file reconstruction typo and formatting drift were detected by diff review and corrected before PR/CI.
-- No explicit production promotion is included. Netlify account-level auto-deploy linkage remains outside repository evidence and must be independently verified before release.
+- Current verified cleanup `main`: `41d88be698d1e7bd7cd0eaca1956323d2941290c`.
+- PR #10 — `Phase 2B: bind pending signup to account` — merged with expected-head guard on exact verified head `136ae88e46ff62a961d684cbb6ed92d705a13033`.
+- Merge commit: `41d88be698d1e7bd7cd0eaca1956323d2941290c`, with parents `235fdb4277e20be230ae012b0101176a68c15d5c` and `136ae88e46ff62a961d684cbb6ed92d705a13033`.
+- Exact-head CI immediately before merge was green: Phase 0A Integrity `34744925819`, Phase 0B Backend Contract `34744925796`, and Phase 1 Playwright `34744925879` with 27/27 Chromium tests, Node `v22.23.2`, and 0 npm vulnerabilities.
+- Phase 2B runtime scope is limited to pending-signup `localStorage` ownership in `index.html`; no new screen, DOM ID, browser-global wrapper, RPC, SQL, grant, RLS, or Science change is included.
+- Pending signup state is versioned as `{version: 2, userId, name, classId, role}` and is written only after successful signup returns an Auth user ID. It is auto-submitted, used to pre-fill the gate, or removed only for the matching account; valid state belonging to another account is preserved; legacy/unbound state fails closed.
+- Browser coverage proves same-account verification return, failed signup, cross-account auto-submit/pre-fill prevention, preservation during another account's manual gate submission, preservation for an authorized different account, and legacy unbound-state handling.
+- Fresh live Supabase inspection re-confirmed that `attendance_submit_teacher_request` binds its subject to `auth.uid()` and `attendance_teacher_status` returns `user_id`, so no backend authorization change was required.
+- No Supabase mutation, Science change, `netlify.toml` change, attendance-history/reporting change, production-data change, or explicit production promotion was performed.
+- Netlify account-level auto-deploy linkage remains outside repository evidence and must be independently verified before any release decision.
 
-**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` or the Phase 2B branch as a production release.
+**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` as a production release.
 
-**Next action:** Verify the exact Phase 2B PR head through Phase 0A Integrity, Phase 0B Backend Contract, and the full Playwright suite; review the final diff and rollback boundary; then STOP at the Phase 2B merge gate for explicit user approval. Do not begin Phase 2C automatically.
+**Next action:** STOP before Phase 2C. The next engineering action is a fresh Phase 2C impact-map/re-verification from exact `main` `41d88be698d1e7bd7cd0eaca1956323d2941290c`, followed by explicit user approval before any Phase 2C implementation. Do not begin Phase 2C automatically.
 
 **Recommended thinking effort:** High.
 
@@ -338,3 +337,4 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** Documentation closure PR #9 recorded the merged Phase 2A checkpoint and was merged into `main` at `235fdb4277e20be230ae012b0101176a68c15d5c`. The merge was documentation-only; Phase 2A runtime remained unchanged and Phase 2B/2C/2D remained unstarted.
 - **13 Sep 2026:** Phase 2B impact mapping and fresh live RPC verification completed from exact `main` `235fdb4277e20be230ae012b0101176a68c15d5c`. Confirmed that unbound pending-signup `localStorage` could be submitted, pre-filled, or deleted by a different account on a shared browser. Live `attendance_submit_teacher_request` remains bound internally to `auth.uid()` and `attendance_teacher_status` returns `user_id`, so the checkpoint is frontend/test-only with no backend authorization change required.
 - **13 Sep 2026:** Phase 2B implemented on `cleanup/phase-2b-pending-signup-binding`: pending signup state is versioned and bound to Auth user ID, written only after successful signup, consumed/cleared only for the matching account, and legacy unbound state fails closed. Browser tests were expanded for same-account verification return, failed signup, cross-account isolation, preservation during manual gate submission, authorized-account isolation, and legacy-state handling. Whole-file `index.html` reconstruction drift was caught during diff review and corrected before PR/CI. Verification remains pending; do not merge or start Phase 2C until exact-head gates are green and explicit approval is given.
+- **13 Sep 2026:** Phase 2B completed. PR #10 was re-verified at exact head `136ae88e46ff62a961d684cbb6ed92d705a13033` with exactly three changed files and all three required CI gates green (Phase 0A `34744925819`, Phase 0B `34744925796`, Playwright `34744925879`: 27/27 passed, 0 npm vulnerabilities), then merged with an expected-head SHA guard. Verified signed new cleanup `main` at `41d88be698d1e7bd7cd0eaca1956323d2941290c`, with parents `235fdb4277e20be230ae012b0101176a68c15d5c` and `136ae88e46ff62a961d684cbb6ed92d705a13033`. No backend, Science, `netlify.toml`, attendance-history/reporting, production-data, or explicit production-promotion change was included. Phase 2C/2D remain unstarted.
