@@ -7,6 +7,30 @@ import {
   syntheticClass
 } from './harness.mjs';
 
+const PENDING_SIGNUP_KEY = 'srlAttendancePendingTeacherSignup';
+
+const pendingSignup = (overrides = {}) => ({
+  version: 2,
+  userId: 'user-a',
+  name: 'Teacher A',
+  classId: 'class-3b',
+  role: 'assistant_teacher',
+  ...overrides
+});
+
+async function seedPendingSignup(page, value) {
+  await page.addInitScript(({ key, pending }) => {
+    localStorage.setItem(key, JSON.stringify(pending));
+  }, { key: PENDING_SIGNUP_KEY, pending: value });
+}
+
+async function readPendingSignup(page) {
+  return page.evaluate(key => {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }, PENDING_SIGNUP_KEY);
+}
+
 test('teacher signs in, survives refresh, and signs out', async ({ page }) => {
   const harness = await installHarness(page, {
     session: null,
@@ -80,13 +104,19 @@ test('signup returns from email verification into Pending Approval', async ({ pa
   const harness = await installHarness(page, {
     session: null,
     auth: {
-      signUp: { data: { session: null, user: { email: 'new.teacher@example.test' } }, error: null }
+      signUp: {
+        data: {
+          session: null,
+          user: { id: 'user-new-teacher', email: 'new.teacher@example.test' }
+        },
+        error: null
+      }
     },
     rpc: {
       attendance_signup_options: { schools: [school] },
       attendance_teacher_status: [
-        { authorized: false, signup_request: null },
-        { authorized: false, signup_request: pending }
+        { user_id: 'user-new-teacher', authorized: false, signup_request: null },
+        { user_id: 'user-new-teacher', authorized: false, signup_request: pending }
       ],
       attendance_submit_teacher_request: { status: 'pending' }
     }
@@ -102,15 +132,24 @@ test('signup returns from email verification into Pending Approval', async ({ pa
   await page.locator('#signupBtn').click();
 
   await expect(page.locator('#signupMsg')).toContainText('Check your email');
+  expect(await readPendingSignup(page)).toEqual({
+    version: 2,
+    userId: 'user-new-teacher',
+    name: 'Synthetic Teacher',
+    classId: 'class-3a',
+    role: 'class_teacher'
+  });
+
   await page.evaluate(() => {
     localStorage.setItem('__ATTENDANCE_TEST_SESSION__', JSON.stringify({
-      user: { email: 'new.teacher@example.test' }
+      user: { id: 'user-new-teacher', email: 'new.teacher@example.test' }
     }));
   });
 
   await page.reload();
   await expect(page.locator('#teacherGateView')).toBeVisible();
   await expect(page.locator('#gateStatus')).toContainText('Pending admin approval');
+  expect(await readPendingSignup(page)).toBeNull();
 
   const calls = await harness.calls();
   const request = calls.rpc.find(call => call.name === 'attendance_submit_teacher_request');
@@ -119,6 +158,144 @@ test('signup returns from email verification into Pending Approval', async ({ pa
     p_requested_class_id: 'class-3a',
     p_requested_role: 'class_teacher'
   });
+  await harness.expectNoProductionRequests();
+});
+
+test('failed signup does not create pending signup state', async ({ page }) => {
+  const school = { id: 'school-test', name: 'SR Lumapas Test', classes: [syntheticClass()] };
+  const harness = await installHarness(page, {
+    session: null,
+    auth: {
+      signUp: { data: { session: null, user: null }, error: { message: 'Synthetic signup failure' } }
+    },
+    rpc: {
+      attendance_signup_options: { schools: [school] }
+    }
+  });
+
+  await page.goto('/');
+  await page.locator('#openSignupBtn').click();
+  await page.locator('#signupName').fill('Failed Teacher');
+  await page.locator('#signupEmail').fill('failed.teacher@example.test');
+  await page.locator('#signupPassword').fill('synthetic-password');
+  await page.locator('#signupClass').selectOption('class-3a');
+  await page.locator('#signupBtn').click();
+
+  await expect(page.locator('#signupMsg')).toContainText('Synthetic signup failure');
+  expect(await readPendingSignup(page)).toBeNull();
+  await harness.expectNoProductionRequests();
+});
+
+test('shared device pending signup does not submit or prefill for a different account', async ({ page }) => {
+  const classes = [
+    syntheticClass(),
+    syntheticClass({ id: 'class-3b', class_code: '3B', class_name: 'Year 3B' })
+  ];
+  const school = { id: 'school-test', name: 'SR Lumapas Test', classes };
+  const teacherAPending = pendingSignup();
+  await seedPendingSignup(page, teacherAPending);
+
+  const harness = await installHarness(page, {
+    session: { user: { id: 'user-b', email: 'teacher.b@example.test' } },
+    rpc: {
+      attendance_teacher_status: [
+        { user_id: 'user-b', authorized: false, signup_request: null },
+        {
+          user_id: 'user-b',
+          authorized: false,
+          signup_request: {
+            status: 'pending',
+            full_name: 'Teacher B',
+            requested_class_id: 'class-3a',
+            requested_class_code: '3A',
+            requested_role: 'class_teacher'
+          }
+        }
+      ],
+      attendance_signup_options: { schools: [school] },
+      attendance_submit_teacher_request: { status: 'pending' }
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#teacherGateView')).toBeVisible();
+  await expect(page.locator('#gateRequestForm')).toBeVisible();
+  await expect(page.locator('#gateName')).toHaveValue('');
+  await expect(page.locator('#gateClass')).toHaveValue('class-3a');
+  await expect(page.locator('#gateRole')).toHaveValue('class_teacher');
+
+  let calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_submit_teacher_request')).toEqual([]);
+  expect(await readPendingSignup(page)).toEqual(teacherAPending);
+
+  await page.locator('#gateName').fill('Teacher B');
+  await page.locator('#gateClass').selectOption('class-3a');
+  await page.locator('#gateRole').selectOption('class_teacher');
+  await page.locator('#gateSubmitBtn').click();
+  await expect(page.locator('#gateStatus')).toContainText('Pending admin approval');
+
+  calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_submit_teacher_request')).toEqual([
+    {
+      name: 'attendance_submit_teacher_request',
+      args: {
+        p_full_name: 'Teacher B',
+        p_requested_class_id: 'class-3a',
+        p_requested_role: 'class_teacher'
+      }
+    }
+  ]);
+  expect(await readPendingSignup(page)).toEqual(teacherAPending);
+  await harness.expectNoProductionRequests();
+});
+
+test('authorized different account does not clear another user pending signup state', async ({ page }) => {
+  const teacherAPending = pendingSignup();
+  await seedPendingSignup(page, teacherAPending);
+  const harness = await installHarness(page, {
+    session: { user: { id: 'user-b', email: 'teacher.b@example.test' } },
+    rpc: {
+      attendance_teacher_status: { user_id: 'user-b', authorized: true, signup_request: null },
+      attendance_bootstrap: bootstrapFixture(),
+      attendance_load_register: registerFixture()
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#appView')).toBeVisible();
+  expect(await readPendingSignup(page)).toEqual(teacherAPending);
+  await harness.expectNoProductionRequests();
+});
+
+test('legacy unbound pending signup state is discarded instead of attributed to the signed-in account', async ({ page }) => {
+  const classes = [
+    syntheticClass(),
+    syntheticClass({ id: 'class-3b', class_code: '3B', class_name: 'Year 3B' })
+  ];
+  const school = { id: 'school-test', name: 'SR Lumapas Test', classes };
+  await seedPendingSignup(page, {
+    name: 'Legacy Teacher',
+    classId: 'class-3b',
+    role: 'assistant_teacher'
+  });
+  const harness = await installHarness(page, {
+    session: { user: { id: 'user-b', email: 'teacher.b@example.test' } },
+    rpc: {
+      attendance_teacher_status: { user_id: 'user-b', authorized: false, signup_request: null },
+      attendance_signup_options: { schools: [school] }
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#teacherGateView')).toBeVisible();
+  await expect(page.locator('#gateRequestForm')).toBeVisible();
+  await expect(page.locator('#gateName')).toHaveValue('');
+  await expect(page.locator('#gateClass')).toHaveValue('class-3a');
+  await expect(page.locator('#gateRole')).toHaveValue('class_teacher');
+  expect(await readPendingSignup(page)).toBeNull();
+
+  const calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_submit_teacher_request')).toEqual([]);
   await harness.expectNoProductionRequests();
 });
 
