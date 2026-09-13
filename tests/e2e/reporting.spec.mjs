@@ -250,6 +250,26 @@ function ytdReportFixture() {
   };
 }
 
+function reportOptions3BFixture() {
+  return {
+    class: { id: 'class-3b', class_code: '3B', class_name: 'Year 3B', year_no: 2026 },
+    terms: [
+      { id: 'term-3b', term_name: '3B Term', start_date: '2026-01-02', end_date: '2026-04-30' }
+    ]
+  };
+}
+
+function marchDashboardFixture() {
+  const data = dashboardFixture();
+  return {
+    ...data,
+    month: '2026-03',
+    as_of_date: '2026-03-31',
+    summary: { ...data.summary, cumulative_total: 900 },
+    latest_school_day: { ...data.latest_school_day, date: '2026-03-03' }
+  };
+}
+
 test('3A February statistics preserve the official 17-day reporting invariant', async ({ page }) => {
   const harness = await openAuthorized(page, {
     admin: true,
@@ -404,5 +424,117 @@ test('YTD report sends the selected as-of date instead of a term id', async ({ p
     p_term_id: null,
     p_as_of_date: '2026-03-15'
   });
+  await harness.expectNoProductionRequests();
+});
+
+test('newer monthly statistics selection ignores an older response that finishes last', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_monthly_class_stats: [
+        { __defer: 'stats-old', response: februaryStatsFixture() },
+        missingMonthlyStatsFixture()
+      ]
+    }
+  });
+
+  await page.locator('#statisticsTabBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('stats-old');
+  await page.locator('#statsClassSelect').selectOption('class-3b');
+  await expect(page.locator('#statsCumulative')).toHaveText('90');
+  await expect(page.locator('#statsBanner')).toContainText('1 register is missing');
+
+  await harness.releaseRpc('stats-old');
+  await expect(page.locator('#statsClassSelect')).toHaveValue('class-3b');
+  await expect(page.locator('#statsCumulative')).toHaveText('90');
+  await expect(page.locator('#statsBanner')).toContainText('1 register is missing');
+  await harness.expectNoProductionRequests();
+});
+
+test('newer dashboard month ignores an older dashboard response that finishes last', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_school_dashboard: [
+        { __defer: 'dashboard-old', response: dashboardFixture() },
+        marchDashboardFixture()
+      ]
+    }
+  });
+
+  await page.locator('#dashboardTabBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('dashboard-old');
+  await page.locator('#dashboardMonth').evaluate(element => {
+    element.value = '2026-03';
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(page.locator('#dashboardMonthLabel')).toHaveText('March 2026');
+  await expect(page.locator('#dashboardCumulative')).toHaveText('900');
+
+  await harness.releaseRpc('dashboard-old');
+  await expect(page.locator('#dashboardMonth')).toHaveValue('2026-03');
+  await expect(page.locator('#dashboardMonthLabel')).toHaveText('March 2026');
+  await expect(page.locator('#dashboardCumulative')).toHaveText('900');
+  await harness.expectNoProductionRequests();
+});
+
+test('newer report class keeps its term options when older options finish last', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_class_report_options: [
+        { __defer: 'report-options-old', response: reportOptionsFixture() },
+        reportOptions3BFixture()
+      ]
+    }
+  });
+
+  await page.locator('#reportsTabBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('report-options-old');
+  await page.locator('#reportClassSelect').selectOption('class-3b');
+  await expect(page.locator('#reportTermSelect')).toHaveValue('term-3b');
+  await expect(page.locator('#reportTermSelect')).toContainText('3B Term');
+
+  await harness.releaseRpc('report-options-old');
+  await expect(page.locator('#reportClassSelect')).toHaveValue('class-3b');
+  await expect(page.locator('#reportTermSelect')).toHaveValue('term-3b');
+  await expect(page.locator('#reportTermSelect')).toContainText('3B Term');
+  await harness.expectNoProductionRequests();
+});
+
+test('newer YTD report remains rendered when an older term report finishes last', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_class_report_options: reportOptionsFixture(),
+      attendance_class_period_report: [
+        { __defer: 'period-report-old', response: termReportFixture() },
+        ytdReportFixture()
+      ]
+    }
+  });
+
+  await page.locator('#reportsTabBtn').click();
+  await expect(page.locator('#reportTermSelect')).toHaveValue('term-1');
+  await page.locator('#loadReportBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('period-report-old');
+
+  await page.locator('#reportType').selectOption('ytd');
+  await page.locator('#reportAsOf').fill('2026-03-15');
+  await expect(page.locator('#loadReportBtn')).toBeEnabled();
+  await page.locator('#loadReportBtn').click();
+  await expect(page.locator('#reportPeriodLabel')).toHaveText('Year to Date through 15 March 2026');
+  await expect(page.locator('#reportCumulative')).toHaveText('650');
+  await expect(page.locator('#exportReportBtn')).toBeEnabled();
+
+  await harness.releaseRpc('period-report-old');
+  await expect(page.locator('#reportType')).toHaveValue('ytd');
+  await expect(page.locator('#reportPeriodLabel')).toHaveText('Year to Date through 15 March 2026');
+  await expect(page.locator('#reportCumulative')).toHaveText('650');
+  await expect(page.locator('#exportReportBtn')).toBeEnabled();
   await harness.expectNoProductionRequests();
 });
