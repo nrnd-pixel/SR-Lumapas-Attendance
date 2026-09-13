@@ -447,6 +447,7 @@ const $=id=>document.getElementById(id);
 const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};
 let passwordRecoveryActive=initialRecoveryLink;
 const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
+const PENDING_SIGNUP_VERSION=2;
 const routineOptions=[
   ['present','Present'],['absent','Absent'],['late','Late'],['permission','Permission'],
   ['SS','SEN / Special'],['T','Transfer Out'],['D','Deferred'],['X','Deceased'],
@@ -457,7 +458,7 @@ function bruneiToday(){
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Brunei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
   const o={}; parts.forEach(p=>o[p.type]=p.value); return o.year+'-'+o.month+'-'+o.day;
 }
-function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt',"'":'&#39;','"':'&quot;'}[c]));}
 function displayDate(s){
   if(!s)return'';
   const [y,m,d]=s.split('-').map(Number);
@@ -535,6 +536,32 @@ async function submitTeacherRequest(name,classId,role){
   const {data,error}=await sb.rpc('attendance_submit_teacher_request',{p_full_name:name,p_requested_class_id:classId,p_requested_role:role});
   if(error)throw error;return data;
 }
+function readPendingSignup(){
+  const raw=localStorage.getItem(PENDING_SIGNUP_KEY);
+  if(!raw)return null;
+  try{
+    const pending=JSON.parse(raw);
+    const valid=pending?.version===PENDING_SIGNUP_VERSION
+      && typeof pending.userId==='string'&&pending.userId
+      && typeof pending.name==='string'&&pending.name.trim()
+      && typeof pending.classId==='string'&&pending.classId
+      && (pending.role==='class_teacher'||pending.role==='assistant_teacher');
+    if(!valid){localStorage.removeItem(PENDING_SIGNUP_KEY);return null;}
+    return pending;
+  }catch(e){localStorage.removeItem(PENDING_SIGNUP_KEY);return null;}
+}
+function pendingSignupForUser(userId){
+  const pending=readPendingSignup();
+  return pending&&userId&&pending.userId===userId?pending:null;
+}
+function storePendingSignup(userId,name,classId,role){
+  if(!userId)return;
+  localStorage.setItem(PENDING_SIGNUP_KEY,JSON.stringify({version:PENDING_SIGNUP_VERSION,userId,name,classId,role}));
+}
+function clearPendingSignupForUser(userId){
+  const pending=readPendingSignup();
+  if(pending&&userId&&pending.userId===userId)localStorage.removeItem(PENDING_SIGNUP_KEY);
+}
 
 function setBusy(flag){
   state.loading=flag;
@@ -571,18 +598,18 @@ async function showTeacherGate(status){
     $('gateStatus').innerHTML='<strong>Pending admin approval</strong><br>'+esc(req.full_name)+' · '+esc(req.requested_class_code)+' · '+(req.requested_role==='assistant_teacher'?'Assistant Teacher':'Class Teacher')+'.';
   }else if(req?.status==='rejected'){
     $('gateStatus').innerHTML='<strong>Request not approved</strong><br>'+(req.admin_note?esc(req.admin_note):'You may submit a corrected request below.');
-    await prepareGateRequest(req);
+    await prepareGateRequest(req,status?.user_id);
   }else{
     $('gateStatus').innerHTML='<strong>No Attendance class access yet.</strong><br>Complete the request below for administrator approval.';
-    await prepareGateRequest(req);
+    await prepareGateRequest(req,status?.user_id);
   }
 }
-async function prepareGateRequest(req){
+async function prepareGateRequest(req,userId){
   try{
     const {classes}=await getSignupClasses();fillGroupedClasses($('gateClass'),classes,{compact:true});
     if(req?.requested_class_id)$('gateClass').value=req.requested_class_id;
     $('gateName').value=req?.full_name||'';$('gateRole').value=req?.requested_role||'class_teacher';
-    const pending=JSON.parse(localStorage.getItem(PENDING_SIGNUP_KEY)||'null');
+    const pending=pendingSignupForUser(userId);
     if(pending){
       if(!$('gateName').value)$('gateName').value=pending.name||'';
       if(pending.classId)$('gateClass').value=pending.classId;
@@ -597,15 +624,16 @@ async function enterApp(){
   if(statusResp.error){showLogin();$('loginMsg').textContent='Could not check teacher access: '+statusResp.error.message;return;}
   status=statusResp.data;state.teacherStatus=status;
   if(!status.authorized){
-    const pending=JSON.parse(localStorage.getItem(PENDING_SIGNUP_KEY)||'null');
+    const pending=pendingSignupForUser(status?.user_id);
     if(pending && !status.signup_request){
-      try{await submitTeacherRequest(pending.name,pending.classId,pending.role);localStorage.removeItem(PENDING_SIGNUP_KEY);
+      try{await submitTeacherRequest(pending.name,pending.classId,pending.role);clearPendingSignupForUser(status?.user_id);
         const fresh=await sb.rpc('attendance_teacher_status');if(!fresh.error)status=fresh.data;
       }catch(e){}
     }
+    if(status.signup_request)clearPendingSignupForUser(status?.user_id);
     await showTeacherGate(status);return;
   }
-  localStorage.removeItem(PENDING_SIGNUP_KEY);
+  clearPendingSignupForUser(status?.user_id);
   hideEntryViews();$('appView').classList.remove('hidden');
   setBusy(true);setBanner('Loading teacher access…','info');
   const boot=await sb.rpc('attendance_bootstrap');
@@ -767,7 +795,13 @@ async function save(){
   if(isCorrection){
     const names=changes.slice(0,3).map(r=>r.full_name).join(', ');
     const more=changes.length>3?' and '+(changes.length-3)+' more':'';
-    if(!confirm(`Save attendance correction for ${displayDate($('dateInput').value)}?\n\nChanged: ${names}${more}\n\nReason: ${correctionReason}\n\nThe original submission will remain in the audit history.`))return;
+    if(!confirm(`Save attendance correction for ${displayDate($('dateInput').value)}?\
+\
+Changed: ${names}${more}\
+\
+Reason: ${correctionReason}\
+\
+The original submission will remain in the audit history.`))return;
   }
 
   state.saving=true;updateSummary();
@@ -1049,20 +1083,24 @@ $('backToLoginBtn').addEventListener('click',showLogin);
 $('signupForm').addEventListener('submit',async e=>{
   e.preventDefault();$('signupMsg').textContent='';$('signupBtn').disabled=true;
   const name=$('signupName').value.trim(),email=$('signupEmail').value.trim(),password=$('signupPassword').value,classId=$('signupClass').value,role=$('signupRole').value;
-  localStorage.setItem(PENDING_SIGNUP_KEY,JSON.stringify({name,classId,role}));
   const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin+'/'}});
   $('signupBtn').disabled=false;
   if(error){$('signupMsg').textContent=error.message;return;}
+  const signupUserId=data?.user?.id||data?.session?.user?.id||null;
+  if(signupUserId)storePendingSignup(signupUserId,name,classId,role);
   if(data.session){
-    try{await submitTeacherRequest(name,classId,role);localStorage.removeItem(PENDING_SIGNUP_KEY);await enterApp();}
+    try{await submitTeacherRequest(name,classId,role);clearPendingSignupForUser(signupUserId);await enterApp();}
     catch(err){$('signupMsg').textContent=err.message;}
   }else{
-    $('signupMsg').style.color='#147a4b';$('signupMsg').textContent='Account created. Check your email and verify the address, then return here. Your approval request will be completed after sign-in.';
+    $('signupMsg').style.color='#147a4b';
+    $('signupMsg').textContent=signupUserId
+      ? 'Account created. Check your email and verify the address, then return here. Your approval request will be completed after sign-in.'
+      : 'Account created. Check your email and verify the address, then sign in and submit your approval request manually.';
   }
 });
 $('gateRequestForm').addEventListener('submit',async e=>{
   e.preventDefault();$('gateMsg').textContent='Submitting request…';$('gateSubmitBtn').disabled=true;
-  try{await submitTeacherRequest($('gateName').value.trim(),$('gateClass').value,$('gateRole').value);localStorage.removeItem(PENDING_SIGNUP_KEY);const st=await sb.rpc('attendance_teacher_status');if(st.error)throw st.error;await showTeacherGate(st.data);}
+  try{await submitTeacherRequest($('gateName').value.trim(),$('gateClass').value,$('gateRole').value);clearPendingSignupForUser(state.teacherStatus?.user_id);const st=await sb.rpc('attendance_teacher_status');if(st.error)throw st.error;await showTeacherGate(st.data);}
   catch(err){$('gateMsg').textContent=err.message;}finally{$('gateSubmitBtn').disabled=false;}
 });
 $('checkApprovalBtn').addEventListener('click',enterApp);
