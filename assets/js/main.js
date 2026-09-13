@@ -1,5 +1,6 @@
 import { createAttendanceClient } from './supabase-client.js';
 import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';
+import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';
 
 const initialRecoveryLink=
   new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery'
@@ -32,17 +33,7 @@ function invalidatePeriodReport(){
   $('exportReportBtn').disabled=true;
 }
 
-function bruneiToday(){
-  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Brunei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
-  const o={}; parts.forEach(p=>o[p.type]=p.value); return o.year+'-'+o.month+'-'+o.day;
-}
 function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function displayDate(s){
-  if(!s)return'';
-  const [y,m,d]=s.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})
-    .format(new Date(Date.UTC(y,m-1,d)));
-}
 function groupFromCode(code){
   if(!code)return'';
   if(code==='P'||code==='PP')return'present';
@@ -412,8 +403,6 @@ function switchPanel(name){
   if(name==='reports'){if(!$('reportClassSelect').value)$('reportClassSelect').value=$('classSelect').value;loadReportOptions();}
   if(name==='students')loadAdminStudents();if(name==='teachers')loadAdminTeachers();
 }
-function formatMonthLabel(v){if(!v)return'';const [y,m]=v.split('-').map(Number);return new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,1)));}
-function shortDay(v){if(!v)return'';const [y,m,d]=v.split('-').map(Number);return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,d)));}
 function setStatsBanner(text,type='info'){const el=$('statsBanner');el.textContent=text;el.className='banner '+type;}
 async function loadMonthlyStats(){
   const classId=$('statsClassSelect').value,month=$('statsMonth').value;if(!classId||!month)return;
