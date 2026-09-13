@@ -92,7 +92,7 @@ Actions:
 **Exit:** backend structure can be recreated without reverse-engineering the live project.
 
 ### Phase 1 — Regression safety net
-**Status:** In progress — Phase 1A complete; Phase 1B candidate is in draft PR #6 and is not merged.
+**Status:** Complete.
 **Goal:** Protect current behaviour before refactoring.
 
 Required real browser scenarios:
@@ -220,7 +220,7 @@ Recommended order:
 ### Immediate
 - Fresh Phase 0B evidence confirms authenticated direct DML is granted on `attendance.daily_registers` and `attendance.attendance_records` within RLS-accessible classes. This preserves class scoping but can bypass `attendance_save_register` completeness, correction-reason, and register correction-count safeguards. Preserve the live state in Phase 0B; redesign/revoke only in the later security phase with regression coverage.
 - Production migration history includes Attendance pupil-roster/pilot seed migrations. Their historical SQL must **not** be copied into the public repository because it may contain real pupil/attendance data. Record only sanitized version/name metadata and recreate the current structure from the live structural snapshot.
-- Phase 1A is merged and the Phase 1B candidate now covers admin management and reporting in real Chromium; Phase 1 remains incomplete until PR #6 is merged after exact-head verification.
+- Phase 1 regression coverage is complete on `main`; 23 Chromium tests cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, and the official 3A reporting invariants. The two confirmed password-recovery defects remain explicit expected failures for Phase 2.
 - v0.7 live and v1.0 development have diverged.
 - Confirmed password-recovery routing race.
 - Potential stale async-response overwrites.
@@ -268,28 +268,24 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 1B — ADMIN/REPORTING PLAYWRIGHT COVERAGE CANDIDATE IN DRAFT PR #6; not merged. Phase 2 has not started.
+**Current checkpoint:** Phase 1 — COMPLETE. Phase 2 has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Persistent roadmap is canonical at repository-root `ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md` on GitHub `main`; future sessions should fetch it directly and also check active cleanup PRs for a newer roadmap copy.
-- Verified Phase 1B base `main`: `3acbd8fc0a6bff99afac7868719d8ce69a044d9f`.
-- Phase 1B branch: `cleanup/phase-1b-admin-reporting-playwright`.
-- Draft PR #6: `Phase 1B: add admin and reporting browser regression coverage`.
-- Last fully verified pre-strengthening PR head: `cd4633c5deba48fadb153ea66e5141d01a242481`.
-- On that head all three gates were green: Phase 1 Playwright run `34735467930`, Phase 0A Integrity run `34735467938`, and Phase 0B Backend Contract run `34735467920`; Playwright ran 23 Chromium tests with one worker and all 23 passed; npm audit reported 0 vulnerabilities.
-- Final review then found one acceptance-quality gap: Transfer Out mocked `preserved_attendance_records` but did not assert the preservation response shown by the real UI. The Phase 1B branch now strengthens that coverage by asserting the Transfer Out preservation count and the analogous Move Class preservation/backfill response. No application code was changed.
-- Phase 1B changes remain limited to the roadmap plus `tests/e2e/admin-management.spec.mjs` and `tests/e2e/reporting.spec.mjs`; the existing Phase 1A harness/workflow/package remain unchanged.
-- Admin-management coverage exercises Transfer In, Transfer Out, Move Class, teacher approval, teacher rejection, and Attendance-only enable/disable using exact frontend RPC payloads and synthetic roster/teacher data.
-- Reporting coverage exercises the official 3A February fixture (17/17 school days, male 214, female 184, cumulative 398, possible 425, ratio 0.9365, 93.65%), the official 3A Term 1 fixture (45/45 registers, cumulative 1,051, ratio 0.9342, 93.42%), a separate synthetic missing-register monthly scenario, the admin school dashboard missing-register safeguard, Term CSV export, and YTD as-of-date RPC semantics.
-- Missing-register tests assert that missing rows display `Missing`/`—`, preserve cumulative totals, and are not treated as zero attendance.
-- A first internally consistent-fixture pass exposed a test interaction-order issue: Playwright attempted to change a hidden Statistics selector. The test was corrected to follow the real visible user path (open Statistics, then change class); application code and assertions were not weakened.
-- The two confirmed password-recovery defects remain encoded as explicit Playwright expected failures with full desired assertions; they are not skipped or weakened and belong to Phase 2.
-- The frozen production frontend remains byte-identical; no DOM, Supabase SQL, RLS/grants, Science, Netlify, Auth configuration, production data, or live v0.7 change has been made in Phase 1B.
-- Merge approval must always be based on the **current PR head**, with Phase 1 Playwright, Phase 0A Integrity, and Phase 0B Backend Contract all green and the exact three-file diff re-verified. Do not rely on older CI after any head change.
+- Verified current `main` after Phase 1 completion: `a0176fa922ff6d524b2844ff761865081000c5cd`.
+- PR #6 — `Phase 1B: add admin and reporting browser regression coverage` — merged successfully on 13 Sep 2026 from exact verified head `4aa3bcc86697ead0935e382fcb1d7ffe8f8b0557` using an expected-head SHA guard.
+- Final exact-head CI before merge was green:
+  - `Phase 1 Playwright` run `34736212462` — success; 23 tests ran with 1 Chromium worker and all 23 passed.
+  - `Phase 0A Integrity` run `34736212438` — success.
+  - `Phase 0B Backend Contract` run `34736212441` — success.
+- `npm install` audited 4 packages and reported 0 vulnerabilities on the verified PR head.
+- Phase 1A covers auth/access, signup/pending approval, daily attendance, corrections, unsaved-change protection, and mobile overflow. Phase 1B adds student movements, teacher administration, monthly statistics, admin dashboard, Term/YTD reports, CSV export, preservation-response semantics, missing-register safeguards, and the official 3A reporting fixtures.
+- The two confirmed password-recovery defects remain encoded as explicit Playwright expected failures with full desired assertions; they are not skipped or weakened. Phase 2 must remove those expected-failure markers only when the application is actually fixed.
+- No separate workflow run was triggered for merge commit `a0176fa922ff6d524b2844ff761865081000c5cd`; merge acceptance therefore relies on the exact verified PR head plus the guarded merge.
+- Live v0.7 remains unchanged. Phase 1 made no production Supabase SQL/data, Science, Netlify/Auth configuration, or deployment change.
 
 **Production safeguard:** keep v0.7 live and unchanged during cleanup.
 
-**Next action:** verify the current PR #6 head, exact three-file diff, mergeability, review state, and all three CI gates. If clean, PR #6 may be marked Ready for Review, then STOP at the Phase 1B merge-approval gate until the user explicitly says `merge`. Do not begin Phase 2 automatically.
+**Next action:** STOP at the Phase 1 completion gate. Before Phase 2 implementation, inspect exact current `main`, map the affected frontend/auth/state/DOM/API contracts and existing Playwright coverage, define the Phase 2 checkpoint plan and rollback risks, and obtain explicit user approval. Do not begin Phase 2 automatically.
 
 **Recommended thinking effort:** High.
 
@@ -312,3 +308,4 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** Phase 1A completed. PR #4 was re-verified at exact head `08e10ed7952e1e21adaafcf458d89f75e56b75ef`, with exactly eight approved files and all three CI gates green, then marked ready and merged with an expected-head SHA guard. Verified current `main` at merge commit `c3c2068f428156a1071f4961f810bebdcbf597bd`. The Playwright browser-regression foundation is now on `main`; live v0.7 and production Supabase remain unchanged. Phase 1B and Phase 2 have not started.
 - **13 Sep 2026:** User approved Phase 1B. Created `cleanup/phase-1b-admin-reporting-playwright` from exact `main` `3acbd8fc0a6bff99afac7868719d8ce69a044d9f` and opened draft PR #6. Added browser coverage for student movements, teacher administration, monthly statistics, dashboard, Term/YTD reports, CSV export, official 3A reporting fixtures, and separate missing-register semantics. After correcting an internal fixture consistency issue and a hidden-selector test-order issue without changing application code or weakening assertions, exact implementation head `3f96b934645ba6f1df743f4bcf9364a1304c7da5` passed all three gates: Playwright run `34735346538` (23 passed), Phase 0A `34735346559`, Phase 0B `34735346539`; npm reported 0 vulnerabilities. PR remains draft/unmerged pending final roadmap-head CI and explicit user merge approval.
 - **13 Sep 2026:** Final Phase 1B review re-verified the three-file-only diff, exact-head CI on `cd4633c5deba48fadb153ea66e5141d01a242481`, and absence of review threads/comments. One test-quality gap was found: Transfer Out mocked the preserved-attendance count without asserting the visible preservation response. The admin-management spec was strengthened to assert both Transfer Out preserved-record messaging and Move Class preserved-record/backfill messaging. The roadmap was updated to make exact-current-head CI—not an older embedded SHA—the merge gate. No application, Supabase, Science, Netlify/Auth, or production-data change was made.
+- **13 Sep 2026:** Phase 1 completed. PR #6 was re-verified at exact head `4aa3bcc86697ead0935e382fcb1d7ffe8f8b0557`, with exactly three approved files and all three gates green (Playwright `34736212462`: 23/23 passed; Phase 0A `34736212438`; Phase 0B `34736212441`), then merged with an expected-head SHA guard. Verified new `main` at merge commit `a0176fa922ff6d524b2844ff761865081000c5cd`. Live v0.7 and production Supabase remain unchanged. Phase 2 has not started.
