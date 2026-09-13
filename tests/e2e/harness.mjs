@@ -57,6 +57,7 @@ const SYNTHETIC_MODULE = String.raw`
 const config = window.__ATTENDANCE_TEST_CONFIG__ || {};
 const calls = window.__ATTENDANCE_TEST_CALLS__ = { auth: [], rpc: [] };
 const indexes = {};
+const deferred = window.__ATTENDANCE_TEST_DEFERRED__ = {};
 let session = config.session || null;
 let authPassword = config.authPassword ?? null;
 let authCallback = null;
@@ -79,6 +80,24 @@ function nextRpc(name) {
   }
   return configuredRpc;
 }
+
+async function resolveRpcResponse(response) {
+  if (response && response.__defer) {
+    return new Promise(resolve => {
+      deferred[response.__defer] = () => resolve(copy(response.response));
+    });
+  }
+  return response;
+}
+
+window.__attendanceTestReleaseRpc = label => {
+  const release = deferred[label];
+  if (!release) return false;
+  delete deferred[label];
+  release();
+  return true;
+};
+window.__attendanceTestPendingRpcLabels = () => Object.keys(deferred);
 
 async function emit(event, nextSession = session) {
   session = nextSession;
@@ -147,7 +166,8 @@ export function createClient() {
     },
     async rpc(name, args = {}) {
       calls.rpc.push({ name, args: copy(args) });
-      const response = nextRpc(name);
+      let response = nextRpc(name);
+      response = await resolveRpcResponse(response);
       if (response === undefined) {
         return { data: null, error: { message: 'Unhandled synthetic RPC: ' + name } };
       }
@@ -193,6 +213,13 @@ export async function installHarness(page, config) {
     productionRequests,
     async calls() {
       return page.evaluate(() => window.__ATTENDANCE_TEST_CALLS__);
+    },
+    async pendingRpcLabels() {
+      return page.evaluate(() => window.__attendanceTestPendingRpcLabels?.() || []);
+    },
+    async releaseRpc(label) {
+      const released = await page.evaluate(value => window.__attendanceTestReleaseRpc?.(value) === true, label);
+      expect(released).toBe(true);
     },
     async expectNoProductionRequests() {
       expect(productionRequests).toEqual([]);
