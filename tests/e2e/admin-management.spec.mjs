@@ -59,6 +59,25 @@ function teacher({ userId, email, active, classCode = '3A' }) {
   };
 }
 
+async function captureStudentManageMessages(page) {
+  await page.locator('#studentManageMsg').evaluate(el => {
+    window.__attendanceStudentManageMessages = [];
+    const observer = new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          const text = node.textContent;
+          if (text) window.__attendanceStudentManageMessages.push(text);
+        }
+      }
+    });
+    observer.observe(el, { childList: true });
+  });
+}
+
+async function studentManageMessages(page) {
+  return page.evaluate(() => window.__attendanceStudentManageMessages || []);
+}
+
 test('admin Transfer In sends exact eligibility payload and refreshes current roster', async ({ page }) => {
   const transferred = {
     enrolment_id: 'enrol-admin-3',
@@ -137,13 +156,14 @@ test('admin Transfer Out preserves history contract and removes pupil from curre
   await expect(page.locator('#transferOutDialog')).toBeVisible();
   await page.locator('#toDate').fill('2026-02-10');
   await page.locator('#toRemarks').fill('Synthetic transfer out');
+  await captureStudentManageMessages(page);
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#toSaveBtn').click();
 
-  await expect(page.locator('#studentManageMsg')).toContainText('5 attendance record(s) preserved');
   await expect(page.locator('#studentAdminCount')).toHaveText('1 current pupils');
   await expect(page.locator('#adminStudentList')).not.toContainText(pupilA.full_name);
   await expect(page.locator('#movementList')).toContainText('transfer out');
+  expect(await studentManageMessages(page)).toContain('Transfer Out saved. 5 attendance record(s) preserved.');
 
   const calls = await harness.calls();
   const transfer = calls.rpc.find(call => call.name === 'attendance_admin_transfer_out');
@@ -180,14 +200,14 @@ test('admin Move Class sends effective-date payload and refreshes pupil into des
   await page.locator('#mcClass').selectOption('class-3b');
   await page.locator('#mcDate').fill('2026-02-09');
   await page.locator('#mcRemarks').fill('Synthetic class move');
+  await captureStudentManageMessages(page);
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#mcSaveBtn').click();
 
-  await expect(page.locator('#studentManageMsg')).toContainText('4 old-class attendance record(s) preserved');
-  await expect(page.locator('#studentManageMsg')).toContainText('1 saved destination register(s) exist from the move date');
   const movedCard = page.locator('#adminStudentList .list-card').filter({ hasText: pupilA.full_name });
   await expect(movedCard).toContainText('3B');
   await expect(page.locator('#movementList')).toContainText('3A → 3B');
+  expect(await studentManageMessages(page)).toContain('Class move saved. 4 old-class attendance record(s) preserved. 1 saved destination register(s) exist from the move date and should be reviewed.');
 
   const calls = await harness.calls();
   const move = calls.rpc.find(call => call.name === 'attendance_admin_move_class');
