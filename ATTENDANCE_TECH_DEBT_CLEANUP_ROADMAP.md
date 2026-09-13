@@ -30,7 +30,7 @@ This file is the canonical source-of-truth roadmap for the Attendance App cleanu
 - 3A historical baseline: 137 registers / 3,425 attendance records.
 - v1.0 frontend package contains `index.html`, `netlify.toml`, and `README.txt`.
 - v1.0 `index.html`: about 1,178 lines / 84.6 KB.
-- Frontend is currently a single embedded ES-module.
+- Original v1.0 frontend is a single embedded ES-module; cleanup `main` now loads the same application code from `assets/js/main.js` after Phase 3A.
 - 171 unique DOM IDs; no duplicate IDs found in the audited v1.0 source.
 - 18 unique Attendance RPCs are called by v1.0 and all 18 currently exist in the live backend.
 - No direct browser table access was found in v1.0; the frontend uses RPCs.
@@ -163,11 +163,11 @@ Phase 2 checkpoint split:
 **Exit:** no known recovery, stale-response, cross-account pending-signup, or hosted Auth redirect-configuration correctness issue remains in the cleaned build.
 
 ### Phase 3 — Frontend modularisation
-**Status:** In progress on `cleanup/phase-3a-extract-main-module`. Phase 3A source-equivalent external-module extraction is implemented and verified on an isolated branch; the Netlify deployment boundary is verified; merge approval remains pending. Phase 3B has not started.
+**Status:** In progress. Phase 3A source-equivalent external-module extraction is complete and merged via PR #16. Phase 3B has not started.
 **Goal:** Remove the single-file frontend bottleneck without changing behaviour.
 
 Phase 3 checkpoint split:
-- **3A — Extract main application module:** move the existing inline ES module verbatim to `assets/js/main.js` and replace it with one same-origin `<script type="module" src="./assets/js/main.js"></script>` loader. Preserve all function bodies/order, DOM IDs/selectors, Supabase calls, state semantics, recovery startup ordering, request-serial stale-response guards, attendance/correction behaviour, reporting behaviour, and admin behaviour. The Phase 0A integrity gate must prove byte-for-byte equivalence against exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2` and syntax-check the external module. No SQL/RPC/grant/RLS/Auth/Science/Netlify configuration change is permitted. **Implemented and verified; merge approval pending.**
+- **3A — Extract main application module:** move the existing inline ES module verbatim to `assets/js/main.js` and replace it with one same-origin `<script type="module" src="./assets/js/main.js"></script>` loader. Preserve all function bodies/order, DOM IDs/selectors, Supabase calls, state semantics, recovery startup ordering, request-serial stale-response guards, attendance/correction behaviour, reporting behaviour, and admin behaviour. The Phase 0A integrity gate must prove byte-for-byte equivalence against exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2` and syntax-check the external module. No SQL/RPC/grant/RLS/Auth/Science/Netlify configuration change is permitted. **Complete and merged via PR #16.**
 - **3B+ — Ownership split:** only after 3A is merged and separately approved, split shared client/state/UI/auth/attendance/reporting/admin ownership in small reversible checkpoints. Do not combine dependency migration, CSP hardening, backend security changes, or UI redesign with the first extraction.
 
 Target ownership:
@@ -314,26 +314,27 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 3A — EXTERNAL MAIN-MODULE EXTRACTION IMPLEMENTED AND VERIFIED; NETLIFY DEPLOYMENT BOUNDARY VERIFIED; MERGE APPROVAL PENDING. Phase 3B has not started.
+**Current checkpoint:** Phase 3A — COMPLETE AND MERGED VIA PR #16. Phase 3B has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Exact signed cleanup `main` / Phase 3A base: `88fffe819a4b287bd05c48c0933ebf14c7d913d2` (PR #15 Phase 2 roadmap-closure merge).
-- Active branch: `cleanup/phase-3a-extract-main-module`; draft PR #16.
+- Exact signed cleanup `main` after Phase 3A merge: `0526944153c4176d47ea1a2b0891e3ed56fe479c`.
+- Phase 3A branch `cleanup/phase-3a-extract-main-module` merged via PR #16; no Phase 3B implementation branch has been started.
 - Phase 3A moves the former inline application ES module verbatim to `assets/js/main.js` and leaves `index.html` with one same-origin external module loader. No application logic, DOM ID/selector, CSS, RPC argument/return contract, Supabase/Auth setting, SQL, grant, RLS, Science object, `netlify.toml`, production data, or production-promotion action is changed.
 - Phase 0A now preserves the original frozen v1.0 checksum and additionally reconstructs the expected Phase 3A result from exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2`; it requires `assets/js/main.js` to equal the former inline module byte-for-byte and `index.html` to differ only by the external loader, then syntax-checks `assets/js/main.js`.
-- First implementation head `608eea92ea2559b48057c9ea08bde8bedea826ce` passed all required gates: Phase 0A Integrity `34755738953`, Phase 0B Backend Contract `34755738940`, and Phase 1 Playwright `34755738981` with 34/34 Chromium tests in 13.4s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities.
+- Final approved Phase 3A PR head `2163d8935ef9669fdc01cc241837caf919fa3e94` passed all required gates: Phase 0A Integrity `34758431583`, Phase 0B Backend Contract `34758431637`, and Phase 1 Playwright `34758431604` with 34/34 Chromium tests in 13.0s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. PR #16 then merged as signed `main` commit `0526944153c4176d47ea1a2b0891e3ed56fe479c` with the expected base/head parents.
 - The existing GitHub Actions warning that `actions/checkout@v4` / `actions/setup-node@v4` target deprecated Node 20 and are forced onto Node 24 remains separate workflow-maintenance debt; the application test runtime is Node 22.
 - User-provided live Netlify Build & deploy settings evidence on 13 September 2026 shows `Current repository: Not linked`. Therefore this site is not currently Git-linked for Netlify continuous deployment, and merging GitHub `main` cannot automatically publish PR #16 through a repository connection. No Netlify configuration was changed.
 - No explicit production promotion has been performed; protected live v0.7 remains the release boundary.
 
 **Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat the Phase 3A branch or cleanup `main` as a production release.
 
-**Next action:** rerun exact-current-head CI/diff review after this evidence-only roadmap update. If all gates remain green, move PR #16 to ready-for-review and STOP before merge and before Phase 3B until explicit user approval.
+**Next action:** prepare a fresh Phase 3B impact map from exact post-Phase-3A `main` `0526944153c4176d47ea1a2b0891e3ed56fe479c`. Do not implement Phase 3B until that impact map is reviewed and explicitly approved.
 
 **Recommended thinking effort:** High.
 
 ## Change log
 
+- **13 Sep 2026:** PR #16 merged as signed `main` commit `0526944153c4176d47ea1a2b0891e3ed56fe479c`, completing Phase 3A. The former inline application module now loads from `assets/js/main.js` with byte-for-byte source equivalence verified at the approved PR head; Netlify remained unlinked and no production promotion occurred. Phase 3B remains unstarted.
 - **10 Sep 2026:** Initial cleanup roadmap created.
 - **12 Sep 2026:** Rebased roadmap on audited v1.0 source and Attendance-specific engineering rules; split Phase 0 into frontend Git baseline and backend reconstruction; marked Maths-specific wrapper/loader checks as not applicable to Attendance; reclassified password-recovery routing race as confirmed production behaviour and added explicit acceptance criteria.
 - **12 Sep 2026:** Created public canonical GitHub repository `nrnd-pixel/SR-Lumapas-Attendance`; recorded initial `main` SHA `5f4608613afefdba81c2bba4c7c8133b5fcf33f5`; froze exact v1.0 frontend on `cleanup/phase-0a-freeze-v1.0`; verified source integrity; opened draft PR #1 for review. No deployment or functional change.
