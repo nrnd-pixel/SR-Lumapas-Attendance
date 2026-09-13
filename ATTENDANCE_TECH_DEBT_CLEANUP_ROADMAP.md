@@ -163,12 +163,13 @@ Phase 2 checkpoint split:
 **Exit:** no known recovery, stale-response, cross-account pending-signup, or hosted Auth redirect-configuration correctness issue remains in the cleaned build.
 
 ### Phase 3 — Frontend modularisation
-**Status:** In progress. Phase 3A source-equivalent external-module extraction is complete and merged via PR #16. Phase 3B has not started.
+**Status:** In progress. Phase 3A is complete and merged. Phase 3B1 Supabase client-boundary extraction is implemented on PR #18 and is merge-pending; Phase 3B2 has not started.
 **Goal:** Remove the single-file frontend bottleneck without changing behaviour.
 
 Phase 3 checkpoint split:
 - **3A — Extract main application module:** move the existing inline ES module verbatim to `assets/js/main.js` and replace it with one same-origin `<script type="module" src="./assets/js/main.js"></script>` loader. Preserve all function bodies/order, DOM IDs/selectors, Supabase calls, state semantics, recovery startup ordering, request-serial stale-response guards, attendance/correction behaviour, reporting behaviour, and admin behaviour. The Phase 0A integrity gate must prove byte-for-byte equivalence against exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2` and syntax-check the external module. No SQL/RPC/grant/RLS/Auth/Science/Netlify configuration change is permitted. **Complete and merged via PR #16.**
-- **3B+ — Ownership split:** only after 3A is merged and separately approved, split shared client/state/UI/auth/attendance/reporting/admin ownership in small reversible checkpoints. Do not combine dependency migration, CSP hardening, backend security changes, or UI redesign with the first extraction.
+- **3B1 — Supabase client boundary:** move only the pinned Supabase JS import and client-construction settings into `assets/js/supabase-client.js`, exporting `createAttendanceClient()`. Keep recovery-link detection and the timing of client creation in `main.js`; preserve the exact CDN version, public project URL/key, Auth options, DOM/API contracts, and all feature behaviour. Evolve Phase 0A so the historical Phase 3A extraction remains provable while current 3B1 is verified as an exact deterministic transformation. **Implemented on PR #18; merge pending.**
+- **3B2+ — Remaining ownership split:** after 3B1 is merged and separately approved, extract shared state/request serials, shared UI/date helpers, auth/recovery, attendance/corrections, reporting/admin ownership, and finally orchestration/event wiring in small reversible checkpoints. Do not combine dependency migration, CSP hardening, backend security changes, UI redesign, or reporting consolidation with these structural moves.
 
 Target ownership:
 - config/environment;
@@ -314,26 +315,27 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 3A — COMPLETE AND MERGED VIA PR #16. Phase 3B has not started.
+**Current checkpoint:** Phase 3B1 — SUPABASE CLIENT BOUNDARY IMPLEMENTED ON PR #18; MERGE PENDING. Phase 3B2 has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Exact signed cleanup `main` after Phase 3A merge: `0526944153c4176d47ea1a2b0891e3ed56fe479c`.
-- Phase 3A branch `cleanup/phase-3a-extract-main-module` merged via PR #16; no Phase 3B implementation branch has been started.
+- Exact signed cleanup `main` used as the Phase 3B1 base after PR #17 closure: `a4eef41c5fa0dd6d807927b187b697ff03ae9afe`.
+- Phase 3B1 branch `cleanup/phase-3b1-supabase-client` was created from exact base `a4eef41c5fa0dd6d807927b187b697ff03ae9afe`; PR #18 is open and merge-pending. Phase 3B2 has not started.
 - Phase 3A moves the former inline application ES module verbatim to `assets/js/main.js` and leaves `index.html` with one same-origin external module loader. No application logic, DOM ID/selector, CSS, RPC argument/return contract, Supabase/Auth setting, SQL, grant, RLS, Science object, `netlify.toml`, production data, or production-promotion action is changed.
-- Phase 0A now preserves the original frozen v1.0 checksum and additionally reconstructs the expected Phase 3A result from exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2`; it requires `assets/js/main.js` to equal the former inline module byte-for-byte and `index.html` to differ only by the external loader, then syntax-checks `assets/js/main.js`.
+- Phase 0A now preserves the original frozen v1.0 checksum, separately proves the historical Phase 3A extraction from exact pre-Phase-3 `main` `88fffe819a4b287bd05c48c0933ebf14c7d913d2`, and proves Phase 3B1 as an exact transformation of the Phase 3A `main.js`: only the pinned Supabase import/client block moves to `assets/js/supabase-client.js`, `index.html` remains unchanged, and both current JavaScript modules are syntax-checked.
 - Final approved Phase 3A PR head `2163d8935ef9669fdc01cc241837caf919fa3e94` passed all required gates: Phase 0A Integrity `34758431583`, Phase 0B Backend Contract `34758431637`, and Phase 1 Playwright `34758431604` with 34/34 Chromium tests in 13.0s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. PR #16 then merged as signed `main` commit `0526944153c4176d47ea1a2b0891e3ed56fe479c` with the expected base/head parents.
 - The existing GitHub Actions warning that `actions/checkout@v4` / `actions/setup-node@v4` target deprecated Node 20 and are forced onto Node 24 remains separate workflow-maintenance debt; the application test runtime is Node 22.
 - User-provided live Netlify Build & deploy settings evidence on 13 September 2026 shows `Current repository: Not linked`. Therefore this site is not currently Git-linked for Netlify continuous deployment, and merging GitHub `main` cannot automatically publish PR #16 through a repository connection. No Netlify configuration was changed.
 - No explicit production promotion has been performed; protected live v0.7 remains the release boundary.
 
-**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat the Phase 3A branch or cleanup `main` as a production release.
+**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat the Phase 3B1 branch or cleanup `main` as a production release.
 
-**Next action:** prepare a fresh Phase 3B impact map from exact post-Phase-3A `main` `0526944153c4176d47ea1a2b0891e3ed56fe479c`. Do not implement Phase 3B until that impact map is reviewed and explicitly approved.
+**Next action:** finish exact-head verification and review of PR #18, then stop at explicit merge approval. Do not begin Phase 3B2 automatically.
 
 **Recommended thinking effort:** High.
 
 ## Change log
 
+- **13 Sep 2026:** Phase 3B1 impact map was reviewed and explicitly approved. From exact signed `main` `a4eef41c5fa0dd6d807927b187b697ff03ae9afe`, branch `cleanup/phase-3b1-supabase-client` and draft PR #18 extract only the pinned Supabase dependency/client construction into `assets/js/supabase-client.js` via `createAttendanceClient()`, while `main.js` retains recovery-link detection and client-creation timing. Fresh read-only live verification confirmed the same 18 frontend Attendance RPC signatures and latest migration `20260906125521 attendance_v12_term_ytd_reporting`; no backend mutation was made. Initial runtime head `c7f0d35e2b657f4235a04af8970d20b4c5fdb083` passed Phase 0A `34760006063` (including historical Phase 3A and exact Phase 3B1 transformation proofs), Phase 0B `34760006039`, and Playwright `34760006095` with 34/34 Chromium tests in 14.2s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. Final current-head CI is mandatory before merge; exact results are recorded in PR #18 after verification.
 - **13 Sep 2026:** PR #16 merged as signed `main` commit `0526944153c4176d47ea1a2b0891e3ed56fe479c`, completing Phase 3A. The former inline application module now loads from `assets/js/main.js` with byte-for-byte source equivalence verified at the approved PR head; Netlify remained unlinked and no production promotion occurred. Phase 3B remains unstarted.
 - **10 Sep 2026:** Initial cleanup roadmap created.
 - **12 Sep 2026:** Rebased roadmap on audited v1.0 source and Attendance-specific engineering rules; split Phase 0 into frontend Git baseline and backend reconstruction; marked Maths-specific wrapper/loader checks as not applicable to Attendance; reclassified password-recovery routing race as confirmed production behaviour and added explicit acceptance criteria.

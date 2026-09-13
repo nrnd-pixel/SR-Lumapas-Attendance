@@ -1,13 +1,9 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';
+import { createAttendanceClient } from './supabase-client.js';
 
 const initialRecoveryLink=
   new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery'
   || new URLSearchParams(window.location.search.slice(1)).get('type')==='recovery';
-const sb=createClient(
-  'https://rojetehazryfpcxlwtbi.supabase.co',
-  'sb_publishable_gc1-vVGBZOSgw32SCJumyw__vm0e3Jd',
-  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
-);
+const sb=createAttendanceClient();
 const $=id=>document.getElementById(id);
 const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};
 let passwordRecoveryActive=initialRecoveryLink;
