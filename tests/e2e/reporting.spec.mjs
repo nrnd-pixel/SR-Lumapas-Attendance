@@ -19,13 +19,13 @@ function februaryStatsFixture() {
       average_attendance: febRatio,
       attendance_percentage: febRatio * 100,
       school_days: 17,
-      scheduled_school_days: 18,
-      cumulative_male: 201,
-      cumulative_female: 197,
+      scheduled_school_days: 17,
+      cumulative_male: 214,
+      cumulative_female: 184,
       possible_attendance: 425,
-      registers_missing: 1,
+      registers_missing: 0,
       registers_completed: 17,
-      provisional: true
+      provisional: false
     },
     roster: {
       pupils_seen_in_month: 25,
@@ -47,13 +47,62 @@ function februaryStatsFixture() {
       },
       {
         date: '2026-02-03',
+        register_exists: true,
+        male_attendance: 11,
+        female_attendance: 12,
+        total_attendance: 23,
+        cumulative_male: 23,
+        cumulative_female: 23,
+        cumulative_total: 46
+      }
+    ]
+  };
+}
+
+function missingMonthlyStatsFixture() {
+  return {
+    month: '2026-02',
+    as_of_date: '2026-02-05',
+    summary: {
+      cumulative_total: 90,
+      average_attendance: 0.9,
+      attendance_percentage: 90,
+      school_days: 4,
+      scheduled_school_days: 5,
+      cumulative_male: 46,
+      cumulative_female: 44,
+      possible_attendance: 100,
+      registers_missing: 1,
+      registers_completed: 4,
+      provisional: true
+    },
+    roster: {
+      pupils_seen_in_month: 23,
+      male_pupils: 12,
+      female_pupils: 11,
+      gender_complete: true,
+      gender_unknown_pupils: 0
+    },
+    daily: [
+      {
+        date: '2026-02-04',
+        register_exists: true,
+        male_attendance: 11,
+        female_attendance: 10,
+        total_attendance: 21,
+        cumulative_male: 46,
+        cumulative_female: 44,
+        cumulative_total: 90
+      },
+      {
+        date: '2026-02-05',
         register_exists: false,
         male_attendance: null,
         female_attendance: null,
         total_attendance: null,
-        cumulative_male: 12,
-        cumulative_female: 11,
-        cumulative_total: 23
+        cumulative_male: 46,
+        cumulative_female: 44,
+        cumulative_total: 90
       }
     ]
   };
@@ -127,10 +176,10 @@ function termReportFixture() {
       cumulative_male: 530,
       cumulative_female: 521,
       registers_completed: 45,
-      registers_missing: 1,
+      registers_missing: 0,
       school_days: 45,
-      scheduled_school_days: 46,
-      provisional: true
+      scheduled_school_days: 45,
+      provisional: false
     },
     roster: {
       pupils_seen: 25,
@@ -143,8 +192,8 @@ function termReportFixture() {
       {
         month: '2026-02',
         registers_completed: 17,
-        registers_missing: 1,
-        scheduled_school_days: 18,
+        registers_missing: 0,
+        scheduled_school_days: 17,
         cumulative_total: 398,
         possible_attendance: 425,
         average_attendance: febRatio,
@@ -158,9 +207,9 @@ function termReportFixture() {
         total_attendance: 23, cumulative_male: 12, cumulative_female: 11, cumulative_total: 23
       },
       {
-        date: '2026-02-03', register_exists: false, eligible_students: 25,
-        male_attendance: null, female_attendance: null, unknown_gender_attendance: null,
-        total_attendance: null, cumulative_male: 12, cumulative_female: 11, cumulative_total: 23
+        date: '2026-02-03', register_exists: true, eligible_students: 25,
+        male_attendance: 11, female_attendance: 12, unknown_gender_attendance: 0,
+        total_attendance: 23, cumulative_male: 23, cumulative_female: 23, cumulative_total: 46
       }
     ]
   };
@@ -201,7 +250,7 @@ function ytdReportFixture() {
   };
 }
 
-test('3A February statistics preserve denominator and missing-register semantics', async ({ page }) => {
+test('3A February statistics preserve the official 17-day reporting invariant', async ({ page }) => {
   const harness = await openAuthorized(page, {
     admin: true,
     classes,
@@ -214,17 +263,39 @@ test('3A February statistics preserve denominator and missing-register semantics
   await expect(page.locator('#statsPossible')).toHaveText('425');
   await expect(page.locator('#statsAverage')).toHaveText('0.9365');
   await expect(page.locator('#statsPercent')).toHaveText('93.65%');
-  await expect(page.locator('#statsBanner')).toContainText('1 register is missing');
-  await expect(page.locator('#statsBanner')).toContainText('completed registers only');
-
-  const missing = page.locator('#statsDailyBody tr.missing-row');
-  await expect(missing).toContainText('Missing');
-  await expect(missing.locator('td').nth(3)).toHaveText('—');
-  await expect(missing.locator('td').nth(6)).toHaveText('23');
+  await expect(page.locator('#statsSchoolDays')).toHaveText('17/17');
+  await expect(page.locator('#statsMale')).toHaveText('214');
+  await expect(page.locator('#statsFemale')).toHaveText('184');
+  await expect(page.locator('#statsBanner')).toContainText('Complete monthly statistics');
 
   const calls = await harness.calls();
   const stats = calls.rpc.find(call => call.name === 'attendance_monthly_class_stats');
   expect(stats.args).toEqual({ p_class_id: 'class-3a', p_month: '2026-02-01' });
+  await harness.expectNoProductionRequests();
+});
+
+test('monthly statistics keep a missing register blank and out of the completed denominator', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: { attendance_monthly_class_stats: missingMonthlyStatsFixture() }
+  });
+
+  await page.locator('#statsClassSelect').selectOption('class-3b');
+  await page.locator('#statisticsTabBtn').click();
+  await expect(page.locator('#statsBanner')).toContainText('1 register is missing');
+  await expect(page.locator('#statsBanner')).toContainText('completed registers only');
+  await expect(page.locator('#statsCumulative')).toHaveText('90');
+  await expect(page.locator('#statsPossible')).toHaveText('100');
+
+  const missing = page.locator('#statsDailyBody tr.missing-row');
+  await expect(missing).toContainText('Missing');
+  await expect(missing.locator('td').nth(3)).toHaveText('—');
+  await expect(missing.locator('td').nth(6)).toHaveText('90');
+
+  const calls = await harness.calls();
+  const stats = calls.rpc.find(call => call.name === 'attendance_monthly_class_stats');
+  expect(stats.args).toEqual({ p_class_id: 'class-3b', p_month: '2026-02-01' });
   await harness.expectNoProductionRequests();
 });
 
@@ -253,7 +324,7 @@ test('admin dashboard distinguishes a missing register from zero attendance', as
   await harness.expectNoProductionRequests();
 });
 
-test('3A Term 1 report preserves invariant values and exports missing registers explicitly', async ({ page }) => {
+test('3A Term 1 report preserves the official 45/45 invariant and CSV export values', async ({ page }) => {
   const harness = await openAuthorized(page, {
     admin: true,
     classes,
@@ -271,12 +342,9 @@ test('3A Term 1 report preserves invariant values and exports missing registers 
   await expect(page.locator('#reportPossible')).toHaveText('1125');
   await expect(page.locator('#reportAverage')).toHaveText('0.9342');
   await expect(page.locator('#reportPercent')).toHaveText('93.42%');
-  await expect(page.locator('#reportBanner')).toContainText('completed registers only');
-
-  const missing = page.locator('#reportDailyBody tr.missing-row');
-  await expect(missing).toContainText('Missing');
-  await expect(missing.locator('td').nth(4)).toHaveText('—');
-  await expect(missing.locator('td').nth(5)).toHaveText('23');
+  await expect(page.locator('#reportRegisters')).toHaveText('45/45');
+  await expect(page.locator('#reportSchoolDays')).toHaveText('45/45');
+  await expect(page.locator('#reportBanner')).toContainText('Complete Term 1 report');
 
   const callsBeforeExport = await harness.calls();
   const report = callsBeforeExport.rpc.find(call => call.name === 'attendance_class_period_report');
@@ -298,8 +366,8 @@ test('3A Term 1 report preserves invariant values and exports missing registers 
   expect(csv).toContain('Cumulative Attendance,1051');
   expect(csv).toContain('Possible Attendance,1125');
   expect(csv).toContain('Average Attendance Ratio,' + termRatio);
-  expect(csv).toContain('2026-02-03,Missing,25');
-  expect(csv).not.toContain('2026-02-03,Missing,25,0,0,0,0');
+  expect(csv).toContain('Completed Registers,45');
+  expect(csv).toContain('Missing Registers,0');
   await harness.expectNoProductionRequests();
 });
 
