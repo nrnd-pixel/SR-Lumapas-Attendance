@@ -24,6 +24,7 @@ jobs:
           test -f index.html
           test -f assets/js/main.js
           test -f assets/js/supabase-client.js
+          test -f assets/js/app-state.js
           test -f netlify.toml
           test -f README.txt
 
@@ -63,15 +64,17 @@ jobs:
           if phase3a_html != expected_html:
               raise SystemExit("Historical Phase 3A index.html contains changes beyond the exact external-module extraction")
 
-      - name: Verify exact Phase 3B1 Supabase client split
+      - name: Verify historical Phase 3B1 Supabase client split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3a_sha = "0526944153c4176d47ea1a2b0891e3ed56fe479c"
-          before_main = subprocess.check_output(["git", "show", f"{phase3a_sha}:assets/js/main.js"], text=True)
+          phase3b1_sha = "ad2026b1056e311e41b50746601398938b73e16a"
+          for sha in (phase3a_sha, phase3b1_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
 
+          before_main = subprocess.check_output(["git", "show", f"{phase3a_sha}:assets/js/main.js"], text=True)
           old_import = "import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';\n"
           new_import = "import { createAttendanceClient } from './supabase-client.js';\n"
           old_client = "const sb=createClient(\n  'https://rojetehazryfpcxlwtbi.supabase.co',\n  'sb_publishable_gc1-vVGBZOSgw32SCJumyw__vm0e3Jd',\n  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}\n);\n"
@@ -80,9 +83,9 @@ jobs:
               raise SystemExit("Historical Phase 3A source does not contain the expected unique Supabase client blocks")
 
           expected_main = before_main.replace(old_import, new_import, 1).replace(old_client, new_client, 1)
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B1 client extraction")
+          phase3b1_main = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/main.js"], text=True)
+          if phase3b1_main != expected_main:
+              raise SystemExit("Historical Phase 3B1 main.js is not the exact approved client extraction")
 
           expected_client = "\n".join([
               "import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';",
@@ -96,14 +99,62 @@ jobs:
               "}",
               ""
           ])
-          current_client = Path("assets/js/supabase-client.js").read_text(encoding="utf-8")
-          if current_client != expected_client:
-              raise SystemExit("assets/js/supabase-client.js is not the exact approved Phase 3B1 client factory")
+          phase3b1_client = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/supabase-client.js"], text=True)
+          if phase3b1_client != expected_client:
+              raise SystemExit("Historical Phase 3B1 supabase-client.js is not the exact approved client factory")
 
           phase3a_html = subprocess.check_output(["git", "show", f"{phase3a_sha}:index.html"], text=True)
+          phase3b1_html = subprocess.check_output(["git", "show", f"{phase3b1_sha}:index.html"], text=True)
+          if phase3b1_html != phase3a_html:
+              raise SystemExit("Historical Phase 3B1 changed index.html")
+
+      - name: Verify exact Phase 3B2 shared-state split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b1_sha = "ad2026b1056e311e41b50746601398938b73e16a"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b1_sha}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/main.js"], text=True)
+
+          client_import = "import { createAttendanceClient } from './supabase-client.js';\n"
+          state_import = "import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';\n"
+          state_decl = "const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};\n"
+          serial_decl = "const requestSerial={register:0,monthlyStats:0,adminDashboard:0,reportOptions:0,periodReport:0};\n"
+          helper_block = "function beginRequest(kind){requestSerial[kind]+=1;return requestSerial[kind];}\nfunction isLatestRequest(kind,serial){return requestSerial[kind]===serial;}\n"
+
+          for label, text in [('client import', client_import), ('state declaration', state_decl), ('request serial declaration', serial_decl), ('request helper block', helper_block)]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Historical Phase 3B1 source does not contain exactly one {label}")
+
+          expected_main = before_main.replace(client_import, client_import + state_import, 1)
+          expected_main = expected_main.replace(state_decl, '', 1).replace(serial_decl, '', 1).replace(helper_block, '', 1)
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B2 state/request-serial extraction")
+
+          expected_state = "\n".join([
+              "export const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};",
+              "export const requestSerial={register:0,monthlyStats:0,adminDashboard:0,reportOptions:0,periodReport:0};",
+              "",
+              "export function beginRequest(kind){requestSerial[kind]+=1;return requestSerial[kind];}",
+              "export function isLatestRequest(kind,serial){return requestSerial[kind]===serial;}",
+              ""
+          ])
+          current_state = Path("assets/js/app-state.js").read_text(encoding="utf-8")
+          if current_state != expected_state:
+              raise SystemExit("assets/js/app-state.js is not the exact approved Phase 3B2 shared-state module")
+
+          historical_client = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/supabase-client.js"], text=True)
+          current_client = Path("assets/js/supabase-client.js").read_text(encoding="utf-8")
+          if current_client != historical_client:
+              raise SystemExit("Phase 3B2 must not change supabase-client.js")
+
+          historical_html = subprocess.check_output(["git", "show", f"{phase3b1_sha}:index.html"], text=True)
           current_html = Path("index.html").read_text(encoding="utf-8")
-          if current_html != phase3a_html:
-              raise SystemExit("Phase 3B1 must not change index.html")
+          if current_html != historical_html:
+              raise SystemExit("Phase 3B2 must not change index.html")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -111,3 +162,4 @@ jobs:
           set -euo pipefail
           node --check assets/js/main.js
           node --check assets/js/supabase-client.js
+          node --check assets/js/app-state.js

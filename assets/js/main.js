@@ -1,23 +1,20 @@
 import { createAttendanceClient } from './supabase-client.js';
+import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';
 
 const initialRecoveryLink=
   new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery'
   || new URLSearchParams(window.location.search.slice(1)).get('type')==='recovery';
 const sb=createAttendanceClient();
 const $=id=>document.getElementById(id);
-const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};
 let passwordRecoveryActive=initialRecoveryLink;
 const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
 const PENDING_SIGNUP_VERSION=2;
-const requestSerial={register:0,monthlyStats:0,adminDashboard:0,reportOptions:0,periodReport:0};
 const routineOptions=[
   ['present','Present'],['absent','Absent'],['late','Late'],['permission','Permission'],
   ['SS','SEN / Special'],['T','Transfer Out'],['D','Deferred'],['X','Deceased'],
   ['SP','Student Pass'],['W','Withdrawn'],['Q','Quit']
 ];
 
-function beginRequest(kind){requestSerial[kind]+=1;return requestSerial[kind];}
-function isLatestRequest(kind,serial){return requestSerial[kind]===serial;}
 function periodReportSelectionKey(){
   const type=$('reportType').value;
   return [
