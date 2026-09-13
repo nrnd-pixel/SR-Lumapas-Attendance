@@ -140,6 +140,7 @@ test('admin Transfer Out preserves history contract and removes pupil from curre
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#toSaveBtn').click();
 
+  await expect(page.locator('#studentManageMsg')).toContainText('5 attendance record(s) preserved');
   await expect(page.locator('#studentAdminCount')).toHaveText('1 current pupils');
   await expect(page.locator('#adminStudentList')).not.toContainText(pupilA.full_name);
   await expect(page.locator('#movementList')).toContainText('transfer out');
@@ -182,6 +183,8 @@ test('admin Move Class sends effective-date payload and refreshes pupil into des
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#mcSaveBtn').click();
 
+  await expect(page.locator('#studentManageMsg')).toContainText('4 old-class attendance record(s) preserved');
+  await expect(page.locator('#studentManageMsg')).toContainText('1 saved destination register(s) exist from the move date');
   const movedCard = page.locator('#adminStudentList .list-card').filter({ hasText: pupilA.full_name });
   await expect(movedCard).toContainText('3B');
   await expect(page.locator('#movementList')).toContainText('3A → 3B');
