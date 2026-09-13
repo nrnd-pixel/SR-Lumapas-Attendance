@@ -458,7 +458,7 @@ function bruneiToday(){
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Brunei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
   const o={}; parts.forEach(p=>o[p.type]=p.value); return o.year+'-'+o.month+'-'+o.day;
 }
-function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt',"'":'&#39;','"':'&quot;'}[c]));}
+function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function displayDate(s){
   if(!s)return'';
   const [y,m,d]=s.split('-').map(Number);
@@ -795,13 +795,7 @@ async function save(){
   if(isCorrection){
     const names=changes.slice(0,3).map(r=>r.full_name).join(', ');
     const more=changes.length>3?' and '+(changes.length-3)+' more':'';
-    if(!confirm(`Save attendance correction for ${displayDate($('dateInput').value)}?\
-\
-Changed: ${names}${more}\
-\
-Reason: ${correctionReason}\
-\
-The original submission will remain in the audit history.`))return;
+    if(!confirm(`Save attendance correction for ${displayDate($('dateInput').value)}?\n\nChanged: ${names}${more}\n\nReason: ${correctionReason}\n\nThe original submission will remain in the audit history.`))return;
   }
 
   state.saving=true;updateSummary();
