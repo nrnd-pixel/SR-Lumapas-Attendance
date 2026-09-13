@@ -26,6 +26,7 @@ jobs:
           test -f assets/js/supabase-client.js
           test -f assets/js/app-state.js
           test -f assets/js/date-helpers.js
+          test -f assets/js/ui-helpers.js
           test -f netlify.toml
           test -f README.txt
 
@@ -158,14 +159,15 @@ jobs:
           if phase3b2_html != phase3b1_html:
               raise SystemExit("Historical Phase 3B2 changed index.html")
 
-      - name: Verify exact Phase 3B3A date-helper split
+      - name: Verify historical Phase 3B3A date-helper split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b2_sha = "ece37a0cfeaf996a20c10a3f0cc638d35cea3c56"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b2_sha}^{{commit}}"], check=True)
+          phase3b3a_sha = "8427442405d6d5a20debe430163b21c243f167ae"
+          for sha in (phase3b2_sha, phase3b3a_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b2_sha}:assets/js/main.js"], text=True)
 
           state_import = "import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';\n"
@@ -182,9 +184,9 @@ jobs:
           expected_main = before_main.replace(state_import, state_import + date_import, 1)
           for block in (brunei_block, display_block, month_block, short_block):
               expected_main = expected_main.replace(block, '', 1)
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B3A date-helper extraction")
+          phase3b3a_main = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:assets/js/main.js"], text=True)
+          if phase3b3a_main != expected_main:
+              raise SystemExit("Historical Phase 3B3A main.js is not the exact approved date-helper extraction")
 
           expected_date = (
               brunei_block.replace("function bruneiToday", "export function bruneiToday", 1)
@@ -192,15 +194,58 @@ jobs:
               + month_block.replace("function formatMonthLabel", "export function formatMonthLabel", 1)
               + short_block.replace("function shortDay", "export function shortDay", 1)
           )
-          current_date = Path("assets/js/date-helpers.js").read_text(encoding="utf-8")
-          if current_date != expected_date:
-              raise SystemExit("assets/js/date-helpers.js is not the exact approved Phase 3B3A date-helper module")
+          phase3b3a_date = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:assets/js/date-helpers.js"], text=True)
+          if phase3b3a_date != expected_date:
+              raise SystemExit("Historical Phase 3B3A date-helpers.js is not the exact approved date-helper module")
 
           for path in ("assets/js/app-state.js", "assets/js/supabase-client.js", "index.html"):
-              historical = subprocess.check_output(["git", "show", f"{phase3b2_sha}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b2_sha}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B3A changed {path}")
+
+      - name: Verify exact Phase 3B3B UI-helper split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b3a_sha = "8427442405d6d5a20debe430163b21c243f167ae"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b3a_sha}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:assets/js/main.js"], text=True)
+
+          date_import = "import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';\n"
+          ui_import = "import { $, esc, fillGroupedClasses } from './ui-helpers.js';\n"
+          dollar_decl = "const $=id=>document.getElementById(id);\n"
+          esc_decl = "function esc(v=''){return String(v).replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',\"'\":'&#39;','\"':'&quot;'}[c]));}\n"
+          fill_block = "function fillGroupedClasses(select,classes,{blankLabel=null,excludeId=null,compact=false}={}){\n  select.innerHTML='';\n  if(blankLabel!==null){const o=document.createElement('option');o.value='';o.textContent=blankLabel;select.appendChild(o);}\n  const groups=new Map();\n  (classes||[]).filter(c=>c.id!==excludeId).forEach(c=>{const y=c.year_level||0;if(!groups.has(y))groups.set(y,[]);groups.get(y).push(c);});\n  [...groups.keys()].sort((a,b)=>a-b).forEach(y=>{\n    const g=document.createElement('optgroup');g.label=y===0?'Prasekolah':'Year '+y;\n    groups.get(y).sort((a,b)=>a.class_code.localeCompare(b.class_code)).forEach(c=>{\n      const o=document.createElement('option');o.value=c.id;\n      o.textContent=compact?(y===0?c.class_code.replace('PRA ','Pra '):c.class_code):(c.class_code+' — '+c.class_name);\n      g.appendChild(o);\n    });select.appendChild(g);\n  });\n}\n"
+
+          for label, text in [('date import', date_import), ('dollar helper', dollar_decl), ('escape helper', esc_decl), ('class grouping helper', fill_block)]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Historical Phase 3B3A source does not contain exactly one {label}")
+
+          expected_main = before_main.replace(date_import, date_import + ui_import, 1)
+          expected_main = expected_main.replace(dollar_decl, '', 1).replace(esc_decl, '', 1).replace(fill_block, '', 1)
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B3B UI-helper extraction")
+
+          expected_ui = (
+              dollar_decl.replace("const $", "export const $", 1)
+              + "\n"
+              + esc_decl.replace("function esc", "export function esc", 1)
+              + "\n"
+              + fill_block.replace("function fillGroupedClasses", "export function fillGroupedClasses", 1)
+          )
+          current_ui = Path("assets/js/ui-helpers.js").read_text(encoding="utf-8")
+          if current_ui != expected_ui:
+              raise SystemExit("assets/js/ui-helpers.js is not the exact approved Phase 3B3B helper module")
+
+          for path in ("assets/js/date-helpers.js", "assets/js/app-state.js", "assets/js/supabase-client.js", "index.html"):
+              historical = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B3A must not change {path}")
+                  raise SystemExit(f"Phase 3B3B must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -210,3 +255,4 @@ jobs:
           node --check assets/js/supabase-client.js
           node --check assets/js/app-state.js
           node --check assets/js/date-helpers.js
+          node --check assets/js/ui-helpers.js

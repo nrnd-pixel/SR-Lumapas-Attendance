@@ -1,12 +1,12 @@
 import { createAttendanceClient } from './supabase-client.js';
 import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';
 import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';
+import { $, esc, fillGroupedClasses } from './ui-helpers.js';
 
 const initialRecoveryLink=
   new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery'
   || new URLSearchParams(window.location.search.slice(1)).get('type')==='recovery';
 const sb=createAttendanceClient();
-const $=id=>document.getElementById(id);
 let passwordRecoveryActive=initialRecoveryLink;
 const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
 const PENDING_SIGNUP_VERSION=2;
@@ -33,7 +33,6 @@ function invalidatePeriodReport(){
   $('exportReportBtn').disabled=true;
 }
 
-function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function groupFromCode(code){
   if(!code)return'';
   if(code==='P'||code==='PP')return'present';
@@ -81,20 +80,6 @@ function confirmDiscard(){
 }
 
 
-function fillGroupedClasses(select,classes,{blankLabel=null,excludeId=null,compact=false}={}){
-  select.innerHTML='';
-  if(blankLabel!==null){const o=document.createElement('option');o.value='';o.textContent=blankLabel;select.appendChild(o);}
-  const groups=new Map();
-  (classes||[]).filter(c=>c.id!==excludeId).forEach(c=>{const y=c.year_level||0;if(!groups.has(y))groups.set(y,[]);groups.get(y).push(c);});
-  [...groups.keys()].sort((a,b)=>a-b).forEach(y=>{
-    const g=document.createElement('optgroup');g.label=y===0?'Prasekolah':'Year '+y;
-    groups.get(y).sort((a,b)=>a.class_code.localeCompare(b.class_code)).forEach(c=>{
-      const o=document.createElement('option');o.value=c.id;
-      o.textContent=compact?(y===0?c.class_code.replace('PRA ','Pra '):c.class_code):(c.class_code+' — '+c.class_name);
-      g.appendChild(o);
-    });select.appendChild(g);
-  });
-}
 async function getSignupClasses(){
   const {data,error}=await sb.rpc('attendance_signup_options');
   if(error)throw error;
