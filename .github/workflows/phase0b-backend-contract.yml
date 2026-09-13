@@ -1,0 +1,170 @@
+name: Phase 0B Backend Contract
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Phase 0B source contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          required = [
+              "supabase/README.md",
+              "supabase/baseline/attendance_v1_schema.sql",
+              "supabase/baseline/attendance_v1_reference_data.sql",
+              "supabase/baseline/production_migration_history.md",
+              "supabase/verify/attendance_contract.sql",
+          ]
+          for path in required:
+              if not Path(path).is_file():
+                  raise SystemExit(f"missing required file: {path}")
+
+          schema = Path("supabase/baseline/attendance_v1_schema.sql").read_text()
+          reference = Path("supabase/baseline/attendance_v1_reference_data.sql").read_text()
+          history = Path("supabase/baseline/production_migration_history.md").read_text()
+          combined = "\n".join(Path(p).read_text() for p in required)
+
+          # Public-repository safety: concrete secrets/credentials/identity exports.
+          forbidden_patterns = {
+              "service-role secret": r"\bsb_secret_[A-Za-z0-9_-]+\b",
+              "legacy JWT/service key": r"\beyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\b",
+              "database URL": r"postgres(?:ql)?://",
+              "private key": r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+              "concrete email address": r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+              "UUID literal": r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b",
+          }
+          for label, pattern in forbidden_patterns.items():
+              if re.search(pattern, combined, re.I):
+                  raise SystemExit(f"forbidden {label} found in Phase 0B public source")
+
+          # Exact structural inventory from the captured snapshot.
+          expected_tables = {
+              "attendance.absence_reasons",
+              "attendance.academic_years",
+              "attendance.attendance_codes",
+              "attendance.attendance_records",
+              "attendance.calendar_dates",
+              "attendance.classes",
+              "attendance.daily_registers",
+              "attendance.enrolments",
+              "attendance.schools",
+              "attendance.settings",
+              "attendance.student_movements",
+              "attendance.students",
+              "attendance.teacher_class_assignments",
+              "attendance.teacher_school_memberships",
+              "attendance.teacher_signup_requests",
+              "attendance.terms",
+              "attendance_private.attendance_record_audit",
+              "attendance_private.teacher_access_audit",
+          }
+          actual_tables = set(re.findall(
+              r"(?im)^create table ((?:attendance|attendance_private)\.[a-z0-9_]+)\s*\(",
+              schema
+          ))
+          if actual_tables != expected_tables:
+              raise SystemExit(
+                  "table inventory mismatch: "
+                  f"missing={sorted(expected_tables-actual_tables)} "
+                  f"extra={sorted(actual_tables-expected_tables)}"
+              )
+          exact_counts = {
+              "constraints": (r"(?im)^alter table .* add constraint ", 94),
+              "non-constraint indexes": (r"(?im)^create (?:unique )?index ", 30),
+              "functions": (r"(?im)^create or replace function ", 25),
+              "SECURITY DEFINER functions": (r"(?i)\bsecurity\s+definer\b", 15),
+              "RLS policies": (r"(?im)^create policy ", 50),
+              "triggers": (r"(?im)^create trigger ", 13),
+          }
+          for label, (pattern, expected_count) in exact_counts.items():
+              actual_count = len(re.findall(pattern, schema))
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"{label} mismatch: expected={expected_count} actual={actual_count}"
+                  )
+
+          expected_rpcs = {
+              "attendance_signup_options",
+              "attendance_submit_teacher_request",
+              "attendance_teacher_status",
+              "attendance_bootstrap",
+              "attendance_load_register",
+              "attendance_save_register",
+              "attendance_monthly_class_stats",
+              "attendance_admin_school_dashboard",
+              "attendance_class_report_options",
+              "attendance_class_period_report",
+              "attendance_admin_student_roster",
+              "attendance_admin_teacher_requests",
+              "attendance_admin_teachers",
+              "attendance_admin_review_teacher_request",
+              "attendance_admin_set_teacher_active",
+              "attendance_admin_transfer_in",
+              "attendance_admin_transfer_out",
+              "attendance_admin_move_class",
+          }
+          actual_rpcs = set(re.findall(
+              r"(?im)^create or replace function public\.(attendance_[a-z0-9_]+)\(",
+              schema
+          ))
+          if actual_rpcs != expected_rpcs:
+              raise SystemExit(
+                  "public RPC mismatch: "
+                  f"missing={sorted(expected_rpcs-actual_rpcs)} "
+                  f"extra={sorted(actual_rpcs-expected_rpcs)}"
+              )
+
+          # Non-sensitive reference rows only.
+          if reference.count("insert into attendance.attendance_codes") != 1:
+              raise SystemExit("attendance code seed missing/duplicated")
+          if reference.count("insert into attendance.absence_reasons") != 1:
+              raise SystemExit("absence reason seed missing/duplicated")
+          forbidden_inserts = [
+              "attendance.students",
+              "attendance.enrolments",
+              "attendance.daily_registers",
+              "attendance.attendance_records",
+              "attendance.teacher_school_memberships",
+              "attendance.teacher_class_assignments",
+              "attendance.teacher_signup_requests",
+              "attendance.student_movements",
+          ]
+          lowref = reference.lower()
+          for table in forbidden_inserts:
+              if f"insert into {table}" in lowref:
+                  raise SystemExit(f"production-data insert forbidden: {table}")
+
+          # Reporting and correction semantic source guards.
+          required_markers = [
+              "Correction reason is required when changing a saved attendance register",
+              "correction_count = correction_count + 1",
+              "attendance.correction_reason",
+              "register_exists",
+              "possible_attendance",
+          ]
+          for marker in required_markers:
+              if marker not in schema:
+                  raise SystemExit(f"required semantic marker missing: {marker}")
+
+          # Historical seed SQL must not be present; metadata markers are expected.
+          if "PRIVATE DATA — OMITTED" not in history:
+              raise SystemExit("private seed migration handling marker missing")
+          if "created_by" in history.lower():
+              raise SystemExit("migration creator metadata must not be published")
+
+          print("Phase 0B backend source contract: PASS")
+          PY
