@@ -278,11 +278,15 @@ test('monthly statistics keep a missing register blank and out of the completed 
   const harness = await openAuthorized(page, {
     admin: true,
     classes,
-    extraRpc: { attendance_monthly_class_stats: missingMonthlyStatsFixture() }
+    extraRpc: {
+      attendance_monthly_class_stats: [februaryStatsFixture(), missingMonthlyStatsFixture()]
+    }
   });
 
-  await page.locator('#statsClassSelect').selectOption('class-3b');
   await page.locator('#statisticsTabBtn').click();
+  await expect(page.locator('#statisticsPanel')).toBeVisible();
+  await expect(page.locator('#statsCumulative')).toHaveText('398');
+  await page.locator('#statsClassSelect').selectOption('class-3b');
   await expect(page.locator('#statsBanner')).toContainText('1 register is missing');
   await expect(page.locator('#statsBanner')).toContainText('completed registers only');
   await expect(page.locator('#statsCumulative')).toHaveText('90');
@@ -294,8 +298,9 @@ test('monthly statistics keep a missing register blank and out of the completed 
   await expect(missing.locator('td').nth(6)).toHaveText('90');
 
   const calls = await harness.calls();
-  const stats = calls.rpc.find(call => call.name === 'attendance_monthly_class_stats');
-  expect(stats.args).toEqual({ p_class_id: 'class-3b', p_month: '2026-02-01' });
+  const statsCalls = calls.rpc.filter(call => call.name === 'attendance_monthly_class_stats');
+  expect(statsCalls).toHaveLength(2);
+  expect(statsCalls.at(-1).args).toEqual({ p_class_id: 'class-3b', p_month: '2026-02-01' });
   await harness.expectNoProductionRequests();
 });
 
