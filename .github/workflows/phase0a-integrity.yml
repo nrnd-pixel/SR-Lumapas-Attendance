@@ -25,6 +25,7 @@ jobs:
           test -f assets/js/main.js
           test -f assets/js/supabase-client.js
           test -f assets/js/app-state.js
+          test -f assets/js/date-helpers.js
           test -f netlify.toml
           test -f README.txt
 
@@ -108,14 +109,15 @@ jobs:
           if phase3b1_html != phase3a_html:
               raise SystemExit("Historical Phase 3B1 changed index.html")
 
-      - name: Verify exact Phase 3B2 shared-state split
+      - name: Verify historical Phase 3B2 shared-state split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b1_sha = "ad2026b1056e311e41b50746601398938b73e16a"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b1_sha}^{{commit}}"], check=True)
+          phase3b2_sha = "ece37a0cfeaf996a20c10a3f0cc638d35cea3c56"
+          for sha in (phase3b1_sha, phase3b2_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/main.js"], text=True)
 
           client_import = "import { createAttendanceClient } from './supabase-client.js';\n"
@@ -130,9 +132,9 @@ jobs:
 
           expected_main = before_main.replace(client_import, client_import + state_import, 1)
           expected_main = expected_main.replace(state_decl, '', 1).replace(serial_decl, '', 1).replace(helper_block, '', 1)
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B2 state/request-serial extraction")
+          phase3b2_main = subprocess.check_output(["git", "show", f"{phase3b2_sha}:assets/js/main.js"], text=True)
+          if phase3b2_main != expected_main:
+              raise SystemExit("Historical Phase 3B2 main.js is not the exact approved state/request-serial extraction")
 
           expected_state = "\n".join([
               "export const state={bootstrap:null,teacherStatus:null,register:null,rows:[],loading:false,saving:false,currentClassId:null,currentDate:null,adminRoster:null,selectedAdminStudent:null,teacherRequests:[],teachers:[],monthlyStats:null,adminDashboard:null,reportOptions:null,periodReport:null};",
@@ -142,19 +144,63 @@ jobs:
               "export function isLatestRequest(kind,serial){return requestSerial[kind]===serial;}",
               ""
           ])
-          current_state = Path("assets/js/app-state.js").read_text(encoding="utf-8")
-          if current_state != expected_state:
-              raise SystemExit("assets/js/app-state.js is not the exact approved Phase 3B2 shared-state module")
+          phase3b2_state = subprocess.check_output(["git", "show", f"{phase3b2_sha}:assets/js/app-state.js"], text=True)
+          if phase3b2_state != expected_state:
+              raise SystemExit("Historical Phase 3B2 app-state.js is not the exact approved shared-state module")
 
-          historical_client = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/supabase-client.js"], text=True)
-          current_client = Path("assets/js/supabase-client.js").read_text(encoding="utf-8")
-          if current_client != historical_client:
-              raise SystemExit("Phase 3B2 must not change supabase-client.js")
+          phase3b1_client = subprocess.check_output(["git", "show", f"{phase3b1_sha}:assets/js/supabase-client.js"], text=True)
+          phase3b2_client = subprocess.check_output(["git", "show", f"{phase3b2_sha}:assets/js/supabase-client.js"], text=True)
+          if phase3b2_client != phase3b1_client:
+              raise SystemExit("Historical Phase 3B2 changed supabase-client.js")
 
-          historical_html = subprocess.check_output(["git", "show", f"{phase3b1_sha}:index.html"], text=True)
-          current_html = Path("index.html").read_text(encoding="utf-8")
-          if current_html != historical_html:
-              raise SystemExit("Phase 3B2 must not change index.html")
+          phase3b1_html = subprocess.check_output(["git", "show", f"{phase3b1_sha}:index.html"], text=True)
+          phase3b2_html = subprocess.check_output(["git", "show", f"{phase3b2_sha}:index.html"], text=True)
+          if phase3b2_html != phase3b1_html:
+              raise SystemExit("Historical Phase 3B2 changed index.html")
+
+      - name: Verify exact Phase 3B3A date-helper split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b2_sha = "ece37a0cfeaf996a20c10a3f0cc638d35cea3c56"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b2_sha}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b2_sha}:assets/js/main.js"], text=True)
+
+          state_import = "import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';\n"
+          date_import = "import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';\n"
+          brunei_block = "function bruneiToday(){\n  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Brunei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());\n  const o={}; parts.forEach(p=>o[p.type]=p.value); return o.year+'-'+o.month+'-'+o.day;\n}\n"
+          display_block = "function displayDate(s){\n  if(!s)return'';\n  const [y,m,d]=s.split('-').map(Number);\n  return new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})\n    .format(new Date(Date.UTC(y,m-1,d)));\n}\n"
+          month_block = "function formatMonthLabel(v){if(!v)return'';const [y,m]=v.split('-').map(Number);return new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,1)));}\n"
+          short_block = "function shortDay(v){if(!v)return'';const [y,m,d]=v.split('-').map(Number);return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,d)));}\n"
+
+          for label, text in [('state import', state_import), ('bruneiToday', brunei_block), ('displayDate', display_block), ('formatMonthLabel', month_block), ('shortDay', short_block)]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Historical Phase 3B2 source does not contain exactly one {label}")
+
+          expected_main = before_main.replace(state_import, state_import + date_import, 1)
+          for block in (brunei_block, display_block, month_block, short_block):
+              expected_main = expected_main.replace(block, '', 1)
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B3A date-helper extraction")
+
+          expected_date = (
+              brunei_block.replace("function bruneiToday", "export function bruneiToday", 1)
+              + display_block.replace("function displayDate", "export function displayDate", 1)
+              + month_block.replace("function formatMonthLabel", "export function formatMonthLabel", 1)
+              + short_block.replace("function shortDay", "export function shortDay", 1)
+          )
+          current_date = Path("assets/js/date-helpers.js").read_text(encoding="utf-8")
+          if current_date != expected_date:
+              raise SystemExit("assets/js/date-helpers.js is not the exact approved Phase 3B3A date-helper module")
+
+          for path in ("assets/js/app-state.js", "assets/js/supabase-client.js", "index.html"):
+              historical = subprocess.check_output(["git", "show", f"{phase3b2_sha}:{path}"], text=True)
+              current = Path(path).read_text(encoding="utf-8")
+              if current != historical:
+                  raise SystemExit(f"Phase 3B3A must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -163,3 +209,4 @@ jobs:
           node --check assets/js/main.js
           node --check assets/js/supabase-client.js
           node --check assets/js/app-state.js
+          node --check assets/js/date-helpers.js
