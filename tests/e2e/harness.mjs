@@ -58,6 +58,7 @@ const config = window.__ATTENDANCE_TEST_CONFIG__ || {};
 const calls = window.__ATTENDANCE_TEST_CALLS__ = { auth: [], rpc: [] };
 const indexes = {};
 let session = config.session || null;
+let authPassword = config.authPassword ?? null;
 let authCallback = null;
 
 const copy = value => value == null ? value : JSON.parse(JSON.stringify(value));
@@ -105,10 +106,12 @@ export function createClient() {
       },
       async signInWithPassword(payload) {
         calls.auth.push({ method: 'signInWithPassword', payload: copy(payload) });
-        const result = configured('signInWithPassword', {
-          data: { session: { user: { email: payload.email } } },
-          error: null
-        });
+        const result = authPassword !== null && payload.password !== authPassword
+          ? { data: { session: null }, error: { message: 'Invalid login credentials' } }
+          : configured('signInWithPassword', {
+              data: { session: { user: { email: payload.email } } },
+              error: null
+            });
         if (!result.error && result.data && result.data.session) {
           session = result.data.session;
           localStorage.setItem('__ATTENDANCE_TEST_SESSION__', JSON.stringify(session));
@@ -135,7 +138,11 @@ export function createClient() {
       },
       async updateUser(payload) {
         calls.auth.push({ method: 'updateUser', payload: copy(payload) });
-        return configured('updateUser', { data: { user: { id: 'test-user' } }, error: null });
+        const result = configured('updateUser', { data: { user: { id: 'test-user' } }, error: null });
+        if (!result.error && payload && Object.prototype.hasOwnProperty.call(payload, 'password')) {
+          authPassword = payload.password;
+        }
+        return result;
       }
     },
     async rpc(name, args = {}) {
