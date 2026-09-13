@@ -37,6 +37,7 @@ This file is the canonical source-of-truth roadmap for the Attendance App cleanu
 - No Attendance-specific global wrapper chain was found.
 - No repository-side SQL definitions, Playwright suite, or verifier suite are included in the original v1.0 ZIP.
 - GitHub Actions integrity CI is now merged on `main` as `.github/workflows/phase0a-integrity.yml`; the Phase 0B backend-contract workflow is also merged as `.github/workflows/phase0b-backend-contract.yml`.
+- Phase 0A's original frozen `index.html` is anchored at merge commit `c578b4240a2bd9899db602fa818bda99bd6ff3cd` with SHA-256 `199d93f81c1cdb1742544f0dbde3f9da2e264b9d2dc16e4ce93cd53140387086`. From Phase 2 onward, the integrity gate must verify that immutable historical baseline while separately syntax-checking the current working frontend; controlled runtime changes must not rewrite the historical baseline.
 - The prior Maths App protocol concepts such as `validateStudentAccess`, `finishPractice`, `cloud.rpc`, `MutationObserver`, `shuffle`, `config.js`, and `v40-release.js` are **not applicable** to Attendance unless they later appear in the repository.
 
 ## Confirmed production bug to fix in cleanup
@@ -64,6 +65,8 @@ Acceptance coverage must prove:
 - old password fails;
 - new password works;
 - teacher/admin permissions and class assignments are preserved.
+
+Phase 2A implements the routing/session correction in draft PR #8. The browser harness proves the recovery screen priority, confirmation mismatch rejection, password update call, recovery-session sign-out, return to normal login, and absence of Attendance RPC entry during recovery. Live v0.7 remains unchanged until an explicitly approved promotion.
 
 ## Roadmap
 
@@ -114,6 +117,7 @@ Required real browser scenarios:
 **Exit:** core workflows pass repeatably in automated browser tests.
 
 ### Phase 2 — Correctness fixes
+**Status:** In progress — Phase 2A password recovery is implemented in draft PR #8; later Phase 2 checkpoints have not started.
 **Goal:** Fix known defects before structural cleanup.
 
 Actions:
@@ -121,6 +125,12 @@ Actions:
 - Prevent stale async responses from overwriting newer class/date/report selections.
 - Replace/harden browser-wide pending teacher-signup `localStorage` so pending state is bound to the correct account/session.
 - Re-verify Supabase Auth Site URL and redirect allow-list for `https://srlumapas.netlify.app/`.
+
+Phase 2 checkpoint split:
+- **2A — Password recovery correctness:** recovery takes startup priority; confirmation is validated; password is updated; recovery session is signed out; normal sign-in is required afterward.
+- **2B — Pending signup account binding:** bind browser-persisted pending signup state to the intended account/session and prevent cross-account reuse on shared devices.
+- **2C — Stale async-response protection:** protect attendance, monthly statistics, dashboard, report-option, and Term/YTD rendering from older responses overwriting newer selections.
+- **2D — Auth URL/redirect re-verification:** re-check hosted Supabase Auth configuration before release; change configuration only if evidence shows a mismatch and only with separate approval.
 
 **Exit:** no known recovery, stale-response, or cross-account pending-signup correctness issue remains.
 
@@ -220,11 +230,11 @@ Recommended order:
 ### Immediate
 - Fresh Phase 0B evidence confirms authenticated direct DML is granted on `attendance.daily_registers` and `attendance.attendance_records` within RLS-accessible classes. This preserves class scoping but can bypass `attendance_save_register` completeness, correction-reason, and register correction-count safeguards. Preserve the live state in Phase 0B; redesign/revoke only in the later security phase with regression coverage.
 - Production migration history includes Attendance pupil-roster/pilot seed migrations. Their historical SQL must **not** be copied into the public repository because it may contain real pupil/attendance data. Record only sanitized version/name metadata and recreate the current structure from the live structural snapshot.
-- Phase 1 regression coverage is complete on `main`; 23 Chromium tests cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, and the official 3A reporting invariants. The two confirmed password-recovery defects remain explicit expected failures for Phase 2.
+- Phase 1 regression coverage is complete on `main`; 23 Chromium tests cover auth/access, attendance/corrections, admin management, reporting, CSV export, missing-register safeguards, and the official 3A reporting invariants. On the Phase 2A branch the two former password-recovery expected failures have been converted into mandatory passing assertions after the application fix; exact-current-head CI remains the merge gate.
 - v0.7 live and v1.0 development have diverged.
-- Confirmed password-recovery routing race.
-- Potential stale async-response overwrites.
-- Pending signup state is too loosely stored for shared-device use.
+- The password-recovery routing race remains present in live v0.7; the cleaned v1.0 Phase 2A fix is under review and must not be treated as production until explicitly promoted.
+- Potential stale async-response overwrites remain for Phase 2C.
+- Pending signup state is too loosely stored for shared-device use and remains for Phase 2B.
 
 ### Medium-term
 - v1.0 single-file frontend is too large for safe continued growth.
@@ -268,24 +278,23 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 1 — COMPLETE. Phase 2 has not started.
+**Current checkpoint:** Phase 2A — PASSWORD RECOVERY CORRECTNESS IN REVIEW. Phase 2B/2C/2D have not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Verified current `main` after Phase 1 completion: `a0176fa922ff6d524b2844ff761865081000c5cd`.
-- PR #6 — `Phase 1B: add admin and reporting browser regression coverage` — merged successfully on 13 Sep 2026 from exact verified head `4aa3bcc86697ead0935e382fcb1d7ffe8f8b0557` using an expected-head SHA guard.
-- Final exact-head CI before merge was green:
-  - `Phase 1 Playwright` run `34736212462` — success; 23 tests ran with 1 Chromium worker and all 23 passed.
-  - `Phase 0A Integrity` run `34736212438` — success.
-  - `Phase 0B Backend Contract` run `34736212441` — success.
-- `npm install` audited 4 packages and reported 0 vulnerabilities on the verified PR head.
-- Phase 1A covers auth/access, signup/pending approval, daily attendance, corrections, unsaved-change protection, and mobile overflow. Phase 1B adds student movements, teacher administration, monthly statistics, admin dashboard, Term/YTD reports, CSV export, preservation-response semantics, missing-register safeguards, and the official 3A reporting fixtures.
-- The two confirmed password-recovery defects remain encoded as explicit Playwright expected failures with full desired assertions; they are not skipped or weakened. Phase 2 must remove those expected-failure markers only when the application is actually fixed.
-- No separate workflow run was triggered for merge commit `a0176fa922ff6d524b2844ff761865081000c5cd`; merge acceptance therefore relies on the exact verified PR head plus the guarded merge.
-- Live v0.7 remains unchanged. Phase 1 made no production Supabase SQL/data, Science, Netlify/Auth configuration, or deployment change.
+- Exact current `main` at the Phase 2A branch point: `9b43a4ce3dd949c37a609c4203654f526ec3b865`.
+- PR #7 documentation closure merged into `main` at `9b43a4ce3dd949c37a609c4203654f526ec3b865`; Phase 1 is formally complete and Phase 2 did not begin until the subsequent impact map and explicit approval.
+- Phase 2A branch: `cleanup/phase-2a-password-recovery`, created from that exact `main` SHA.
+- Draft PR #8 — `Phase 2A: fix password recovery routing` — is open and unmerged.
+- The Phase 2A runtime change is limited to password-recovery startup/session handling in `index.html`; browser coverage is strengthened in `tests/e2e/auth-access.spec.mjs`. No Supabase SQL/RPC/grant/RLS, Science, Netlify, attendance-history, reporting-formula, or production-data change is required.
+- On implementation head `0f8645c3fcaa010d6315b24a346c3f19de1b3cf6`, Phase 1 Playwright run `34737785780` succeeded with all 23 Chromium tests passing, including the three password-recovery cases; npm audited 4 packages with 0 vulnerabilities. Phase 0B Backend Contract run `34737785778` also succeeded.
+- The same head's Phase 0A Integrity run `34737785794` failed only because the original gate still required the *current* `index.html` to equal the frozen v1.0 checksum. The failure occurred at `Verify frozen index checksum`; current-source syntax steps were skipped as a consequence. This was an expected guard-design transition, not a browser/backend regression.
+- User explicitly approved the Phase 0A gate evolution. Commit `1806fe73e14563811ea5fc4ed6ae25469b652dec` changes the integrity workflow so it fetches full Git history, reconstructs the immutable Phase 0A `index.html` from commit `c578b4240a2bd9899db602fa818bda99bd6ff3cd`, verifies the original SHA-256 there, then separately extracts and syntax-checks the current inline ES module. This preserves the original freeze guarantee while allowing approved Phase 2+ runtime changes.
+- The roadmap is being updated in the same PR because the phase status, integrity-gate semantics, and release evidence materially changed.
+- Live v0.7 remains unchanged. No Phase 2A merge or production promotion has occurred.
 
 **Production safeguard:** keep v0.7 live and unchanged during cleanup.
 
-**Next action:** STOP at the Phase 1 completion gate. Before Phase 2 implementation, inspect exact current `main`, map the affected frontend/auth/state/DOM/API contracts and existing Playwright coverage, define the Phase 2 checkpoint plan and rollback risks, and obtain explicit user approval. Do not begin Phase 2 automatically.
+**Next action:** run all three gates on the final exact PR #8 head, review the complete diff and exact SHA, then STOP for explicit merge approval. Do not begin Phase 2B automatically.
 
 **Recommended thinking effort:** High.
 
@@ -309,3 +318,6 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - **13 Sep 2026:** User approved Phase 1B. Created `cleanup/phase-1b-admin-reporting-playwright` from exact `main` `3acbd8fc0a6bff99afac7868719d8ce69a044d9f` and opened draft PR #6. Added browser coverage for student movements, teacher administration, monthly statistics, dashboard, Term/YTD reports, CSV export, official 3A reporting fixtures, and separate missing-register semantics. After correcting an internal fixture consistency issue and a hidden-selector test-order issue without changing application code or weakening assertions, exact implementation head `3f96b934645ba6f1df743f4bcf9364a1304c7da5` passed all three gates: Playwright run `34735346538` (23 passed), Phase 0A `34735346559`, Phase 0B `34735346539`; npm reported 0 vulnerabilities. PR remains draft/unmerged pending final roadmap-head CI and explicit user merge approval.
 - **13 Sep 2026:** Final Phase 1B review re-verified the three-file-only diff, exact-head CI on `cd4633c5deba48fadb153ea66e5141d01a242481`, and absence of review threads/comments. One test-quality gap was found: Transfer Out mocked the preserved-attendance count without asserting the visible preservation response. The admin-management spec was strengthened to assert both Transfer Out preserved-record messaging and Move Class preserved-record/backfill messaging. The roadmap was updated to make exact-current-head CI—not an older embedded SHA—the merge gate. No application, Supabase, Science, Netlify/Auth, or production-data change was made.
 - **13 Sep 2026:** Phase 1 completed. PR #6 was re-verified at exact head `4aa3bcc86697ead0935e382fcb1d7ffe8f8b0557`, with exactly three approved files and all three gates green (Playwright `34736212462`: 23/23 passed; Phase 0A `34736212438`; Phase 0B `34736212441`), then merged with an expected-head SHA guard. Verified new `main` at merge commit `a0176fa922ff6d524b2844ff761865081000c5cd`. Live v0.7 and production Supabase remain unchanged. Phase 2 has not started.
+- **13 Sep 2026:** Documentation closure PR #7 updated the canonical roadmap to mark Phase 1 complete and Phase 2 not started, then merged into `main` at `9b43a4ce3dd949c37a609c4203654f526ec3b865`. No runtime, backend, Science, Netlify/Auth, deployment, or production-data change.
+- **13 Sep 2026:** Phase 2 impact map completed from exact `main` `9b43a4ce3dd949c37a609c4203654f526ec3b865`; user approved Phase 2A only. Draft PR #8 created on `cleanup/phase-2a-password-recovery`. The confirmed recovery race was fixed by giving a recovery link/state priority over normal startup routing and, after a successful password update, signing out the recovery session and returning to normal login. Two former expected-failure recovery tests became mandatory passing assertions. Initial implementation head `0f8645c3fcaa010d6315b24a346c3f19de1b3cf6` passed all 23 Playwright tests and the Phase 0B backend contract; the old Phase 0A current-file checksum guard failed by design because Phase 2 is the first intentional runtime change.
+- **13 Sep 2026:** User approved evolution of the Phase 0A integrity gate. Commit `1806fe73e14563811ea5fc4ed6ae25469b652dec` preserves the original v1.0 freeze by verifying the historical `index.html` from baseline merge `c578b4240a2bd9899db602fa818bda99bd6ff3cd` against the original SHA-256, while separately syntax-checking the current frontend. Final exact-head CI/diff review is required before PR #8 can be considered merge-ready; do not begin Phase 2B automatically.
