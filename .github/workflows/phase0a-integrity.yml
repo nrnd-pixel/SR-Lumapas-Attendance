@@ -30,6 +30,7 @@ jobs:
           test -f assets/js/auth-session.js
           test -f assets/js/attendance-register.js
           test -f assets/js/student-management.js
+          test -f assets/js/teacher-admin.js
           test -f netlify.toml
           test -f README.txt
 
@@ -405,14 +406,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B5 changed {path}")
 
-      - name: Verify exact Phase 3B6 student-management split
+      - name: Verify historical Phase 3B6 student-management split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b6_base = "b4fbee48cc91fb9e60f4163c0fd59d1363f5f9db"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b6_base}^{{commit}}"], check=True)
+          phase3b6_sha = "a915ebf897a29285594bd274725f00c3dfc1bea9"
+          for sha in (phase3b6_base, phase3b6_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b6_base}:assets/js/main.js"], text=True)
 
           attendance_import = "import { initAttendanceRegister, setBusy, setBanner, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';\n"
@@ -449,9 +451,9 @@ jobs:
           expected_main = expected_main.replace(transfer_out_listener, "$('transferOutForm').addEventListener('submit',submitTransferOut);\n", 1)
           expected_main = expected_main.replace(move_listener, "$('moveClassForm').addEventListener('submit',submitMoveClass);", 1)
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B6 student-management extraction")
+          phase3b6_main = subprocess.check_output(["git", "show", f"{phase3b6_sha}:assets/js/main.js"], text=True)
+          if phase3b6_main != expected_main:
+              raise SystemExit("Historical Phase 3B6 main.js is not the exact approved student-management extraction")
 
           core_exports = core_block.replace("async function loadAdminStudents", "export async function loadAdminStudents", 1)
           core_exports = core_exports.replace("function renderAdminStudents", "export function renderAdminStudents", 1)
@@ -489,9 +491,9 @@ jobs:
               + "export async function submitTransferOut(e){" + transfer_out_body + "}\n"
               + "export async function submitMoveClass(e){" + move_body + "}\n"
           )
-          current_module = Path("assets/js/student-management.js").read_text(encoding="utf-8")
-          if current_module != expected_module:
-              raise SystemExit("assets/js/student-management.js is not the exact approved Phase 3B6 extraction")
+          phase3b6_module = subprocess.check_output(["git", "show", f"{phase3b6_sha}:assets/js/student-management.js"], text=True)
+          if phase3b6_module != expected_module:
+              raise SystemExit("Historical Phase 3B6 student-management.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -503,10 +505,76 @@ jobs:
               "assets/js/attendance-register.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b6_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b6_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b6_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B6 changed {path}")
+
+      - name: Verify exact Phase 3B7A teacher-admin split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b7a_base = "fbe65f87b5a6a106ce1953a9d22a26a6793c7635"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b7a_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b7a_base}:assets/js/main.js"], text=True)
+
+          student_import = "import { initStudentManagement, loadAdminStudents, renderAdminStudents, prepareTransferInDialog, syncTransferInStats, submitTransferIn, submitTransferOut, submitMoveClass } from './student-management.js';\n"
+          teacher_import = "import { initTeacherAdmin, loadAdminTeachers } from './teacher-admin.js';\n"
+          student_init = "initStudentManagement(sb,{schoolId,adminClasses,showAdminMsg});\n"
+          teacher_init = "initTeacherAdmin(sb,{adminClasses,showAdminMsg});\n"
+
+          if before_main.count(student_import) != 1 or before_main.count(student_init) != 1:
+              raise SystemExit("Phase 3B7A base does not contain the expected unique student-management import/init markers")
+
+          start = before_main.index("async function loadAdminTeachers(){")
+          end = before_main.index("$('openSignupBtn').addEventListener('click',showSignup);", start)
+          teacher_block = before_main[start:end].rstrip('\n')
+
+          expected_main = before_main.replace(student_import, student_import + teacher_import, 1)
+          expected_main = expected_main.replace(student_init, student_init + teacher_init, 1)
+          block_start = expected_main.index("async function loadAdminTeachers(){")
+          listener_start = expected_main.index("$('openSignupBtn').addEventListener('click',showSignup);", block_start)
+          expected_main = expected_main[:block_start] + "\n" + expected_main[listener_start:]
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7A teacher-admin extraction")
+
+          teacher_exports = teacher_block.replace("async function loadAdminTeachers", "export async function loadAdminTeachers", 1)
+          expected_teacher = (
+              "import { state } from './app-state.js';\n"
+              "import { $, esc } from './ui-helpers.js';\n\n"
+              "let sb;\n"
+              "let adminClasses;\n"
+              "let showAdminMsg;\n\n"
+              "export function initTeacherAdmin(client,helpers){\n"
+              "  sb=client;\n"
+              "  adminClasses=helpers.adminClasses;\n"
+              "  showAdminMsg=helpers.showAdminMsg;\n"
+              "}\n\n"
+              + teacher_exports + "\n"
+          )
+          current_teacher = Path("assets/js/teacher-admin.js").read_text(encoding="utf-8")
+          if current_teacher != expected_teacher:
+              raise SystemExit("assets/js/teacher-admin.js is not the exact approved Phase 3B7A extraction")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "assets/js/student-management.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b7a_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B6 must not change {path}")
+                  raise SystemExit(f"Phase 3B7A must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -520,3 +588,4 @@ jobs:
           node --check assets/js/auth-session.js
           node --check assets/js/attendance-register.js
           node --check assets/js/student-management.js
+          node --check assets/js/teacher-admin.js
