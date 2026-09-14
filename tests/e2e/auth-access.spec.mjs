@@ -302,6 +302,68 @@ test('legacy unbound pending signup state is discarded instead of attributed to 
   await harness.expectNoProductionRequests();
 });
 
+test('rejected teacher request pre-fills correction form and resubmits exact corrected request', async ({ page }) => {
+  const classes = [
+    syntheticClass(),
+    syntheticClass({ id: 'class-3b', class_code: '3B', class_name: 'Year 3B' })
+  ];
+  const school = { id: 'school-test', name: 'SR Lumapas Test', classes };
+  const rejected = {
+    status: 'rejected',
+    full_name: 'Teacher Correction',
+    requested_class_id: 'class-3a',
+    requested_class_code: '3A',
+    requested_role: 'class_teacher',
+    admin_note: '<b>Please choose the correct class</b>'
+  };
+  const pending = {
+    status: 'pending',
+    full_name: 'Teacher Correction',
+    requested_class_id: 'class-3b',
+    requested_class_code: '3B',
+    requested_role: 'assistant_teacher'
+  };
+  const harness = await installHarness(page, {
+    session: { user: { id: 'teacher-rejected', email: 'teacher.rejected@example.test' } },
+    rpc: {
+      attendance_teacher_status: [
+        { user_id: 'teacher-rejected', authorized: false, signup_request: rejected },
+        { user_id: 'teacher-rejected', authorized: false, signup_request: pending }
+      ],
+      attendance_signup_options: { schools: [school] },
+      attendance_submit_teacher_request: { status: 'pending' }
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#teacherGateView')).toBeVisible();
+  await expect(page.locator('#gateStatus')).toContainText('Request not approved');
+  await expect(page.locator('#gateStatus')).toContainText('<b>Please choose the correct class</b>');
+  await expect(page.locator('#gateStatus b')).toHaveCount(0);
+  await expect(page.locator('#gateRequestForm')).toBeVisible();
+  await expect(page.locator('#gateName')).toHaveValue('Teacher Correction');
+  await expect(page.locator('#gateClass')).toHaveValue('class-3a');
+  await expect(page.locator('#gateRole')).toHaveValue('class_teacher');
+
+  await page.locator('#gateClass').selectOption('class-3b');
+  await page.locator('#gateRole').selectOption('assistant_teacher');
+  await page.locator('#gateSubmitBtn').click();
+
+  await expect(page.locator('#gateStatus')).toContainText('Pending admin approval');
+  const calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_submit_teacher_request')).toEqual([
+    {
+      name: 'attendance_submit_teacher_request',
+      args: {
+        p_full_name: 'Teacher Correction',
+        p_requested_class_id: 'class-3b',
+        p_requested_role: 'assistant_teacher'
+      }
+    }
+  ]);
+  await harness.expectNoProductionRequests();
+});
+
 test('forgot password sends the current origin root as recovery redirect', async ({ page }) => {
   const harness = await installHarness(page, { session: null, rpc: {} });
   await page.goto('/');
