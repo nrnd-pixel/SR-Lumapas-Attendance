@@ -424,3 +424,66 @@ test('admin can disable and enable Attendance access without touching other acco
   ]);
   await harness.expectNoProductionRequests();
 });
+
+test('teacher admin escapes hostile request and teacher text while approval controls remain functional', async ({ page }) => {
+  const request = teacherRequest({
+    request_id: 'request-hostile',
+    full_name: 'Synthetic <strong>Teacher</strong>',
+    email: 'request.<img src=x onerror=alert(1)>@example.test',
+    requested_class_code: '<svg onload=alert(1)>'
+  });
+  const approved = teacher({
+    userId: 'teacher-hostile',
+    email: 'approved.<em>teacher</em>@example.test',
+    active: true,
+    classCode: '<b>3B</b>'
+  });
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_teacher_requests: [
+        { data: [request], error: null },
+        { data: [], error: null }
+      ],
+      attendance_admin_teachers: [
+        { data: [approved], error: null },
+        { data: [approved], error: null }
+      ],
+      attendance_admin_review_teacher_request: { status: 'approved' }
+    }
+  });
+
+  await page.locator('#teachersTabBtn').click();
+  const requestList = page.locator('#teacherRequestList');
+  const teacherList = page.locator('#teacherList');
+  await expect(requestList).toContainText('Synthetic <strong>Teacher</strong>');
+  await expect(requestList).toContainText('request.<img src=x onerror=alert(1)>@example.test');
+  await expect(requestList).toContainText('<svg onload=alert(1)>');
+  await expect(requestList.locator('strong')).toHaveCount(0);
+  await expect(requestList.locator('img')).toHaveCount(0);
+  await expect(requestList.locator('svg')).toHaveCount(0);
+  await expect(teacherList).toContainText('approved.<em>teacher</em>@example.test');
+  await expect(teacherList).toContainText('<b>3B</b>');
+  await expect(teacherList.locator('em')).toHaveCount(0);
+  await expect(teacherList.locator('b')).toHaveCount(0);
+
+  const card = requestList.locator('.list-card').filter({ hasText: request.email });
+  await expect(card.locator('.approve-teacher')).toHaveCount(1);
+  await expect(card.locator('.reject-teacher')).toHaveCount(1);
+  await card.locator('.approve-class').selectOption('class-3b');
+  page.once('dialog', dialog => dialog.accept());
+  await card.locator('.approve-teacher').click();
+  await expect(page.locator('#pendingTeacherCount')).toHaveText('0');
+
+  const calls = await harness.calls();
+  const review = calls.rpc.find(call => call.name === 'attendance_admin_review_teacher_request');
+  expect(review.args).toEqual({
+    p_request_id: 'request-hostile',
+    p_action: 'approve',
+    p_class_id: 'class-3b',
+    p_assignment_type: 'class_teacher',
+    p_admin_note: null
+  });
+  await harness.expectNoProductionRequests();
+});
