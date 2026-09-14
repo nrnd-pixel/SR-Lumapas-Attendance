@@ -29,6 +29,7 @@ jobs:
           test -f assets/js/ui-helpers.js
           test -f assets/js/auth-session.js
           test -f assets/js/attendance-register.js
+          test -f assets/js/student-management.js
           test -f netlify.toml
           test -f README.txt
 
@@ -311,14 +312,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B4 changed {path}")
 
-      - name: Verify exact Phase 3B5 attendance-register split
+      - name: Verify historical Phase 3B5 attendance-register split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b5_base = "dc274130989e32d354ff4f28d8cc3c302010b7e5"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b5_base}^{{commit}}"], check=True)
+          phase3b5_sha = "8a3b8173a1e576a8eee39df721bcfcc7a98ce971"
+          for sha in (phase3b5_base, phase3b5_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b5_base}:assets/js/main.js"], text=True)
 
           auth_import = "import { initAuthSession, hideEntryViews, showLogin } from './auth-session.js';\n"
@@ -352,9 +354,9 @@ jobs:
           expected_main = remove_span(expected_main, "function setBusy(flag){", "async function init(){")
           expected_main = remove_span(expected_main, "async function loadRegister(){", "function switchPanel(name){")
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B5 attendance-register extraction")
+          phase3b5_main = subprocess.check_output(["git", "show", f"{phase3b5_sha}:assets/js/main.js"], text=True)
+          if phase3b5_main != expected_main:
+              raise SystemExit("Historical Phase 3B5 main.js is not the exact approved attendance-register extraction")
 
           helper_exports = helper_block
           helper_exports = helper_exports.replace("function hasUnsavedChanges", "export function hasUnsavedChanges", 1)
@@ -385,9 +387,9 @@ jobs:
               + busy_exports + "\n\n"
               + attendance_exports + "\n"
           )
-          current_module = Path("assets/js/attendance-register.js").read_text(encoding="utf-8")
-          if current_module != expected_module:
-              raise SystemExit("assets/js/attendance-register.js is not the exact approved Phase 3B5 extraction")
+          phase3b5_module = subprocess.check_output(["git", "show", f"{phase3b5_sha}:assets/js/attendance-register.js"], text=True)
+          if phase3b5_module != expected_module:
+              raise SystemExit("Historical Phase 3B5 attendance-register.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -398,10 +400,113 @@ jobs:
               "assets/js/auth-session.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b5_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b5_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b5_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B5 changed {path}")
+
+      - name: Verify exact Phase 3B6 student-management split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b6_base = "b4fbee48cc91fb9e60f4163c0fd59d1363f5f9db"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b6_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b6_base}:assets/js/main.js"], text=True)
+
+          attendance_import = "import { initAttendanceRegister, setBusy, setBanner, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';\n"
+          student_import = "import { initStudentManagement, loadAdminStudents, renderAdminStudents, prepareTransferInDialog, syncTransferInStats, submitTransferIn, submitTransferOut, submitMoveClass } from './student-management.js';\n"
+          attendance_init = "initAttendanceRegister(sb);\n"
+          student_init = "initStudentManagement(sb,{schoolId,adminClasses,showAdminMsg});\n"
+
+          if before_main.count(attendance_import) != 1 or before_main.count(attendance_init) != 1:
+              raise SystemExit("Phase 3B6 base does not contain the expected unique Attendance import/init markers")
+
+          def take_span(text, start_marker, end_marker):
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return text[start:end]
+
+          def remove_span(text, start_marker, end_marker, replacement=''):
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return text[:start] + replacement + text[end:]
+
+          core_block = take_span(before_main, "async function loadAdminStudents(){", "async function loadAdminTeachers(){").rstrip('\n')
+          prepare_listener = take_span(before_main, "$('transferInBtn').addEventListener('click',()=>{", "$('tiGroup').addEventListener")
+          group_listener = take_span(before_main, "$('tiGroup').addEventListener('change',()=>{", "document.querySelectorAll('[data-close]')")
+          transfer_in_listener = take_span(before_main, "$('transferInForm').addEventListener('submit',async e=>{", "$('transferOutForm').addEventListener")
+          transfer_out_listener = take_span(before_main, "$('transferOutForm').addEventListener('submit',async e=>{", "$('moveClassForm').addEventListener")
+          move_listener = take_span(before_main, "$('moveClassForm').addEventListener('submit',async e=>{", "\n\nwindow.addEventListener('beforeunload'")
+
+          expected_main = before_main.replace(attendance_import, attendance_import + student_import, 1)
+          expected_main = expected_main.replace(attendance_init, attendance_init + student_init, 1)
+          expected_main = remove_span(expected_main, "async function loadAdminStudents(){", "async function loadAdminTeachers(){")
+          expected_main = expected_main.replace(prepare_listener, "$('transferInBtn').addEventListener('click',prepareTransferInDialog);\n", 1)
+          expected_main = expected_main.replace(group_listener, "$('tiGroup').addEventListener('change',syncTransferInStats);\n", 1)
+          expected_main = expected_main.replace(transfer_in_listener, "$('transferInForm').addEventListener('submit',submitTransferIn);\n", 1)
+          expected_main = expected_main.replace(transfer_out_listener, "$('transferOutForm').addEventListener('submit',submitTransferOut);\n", 1)
+          expected_main = expected_main.replace(move_listener, "$('moveClassForm').addEventListener('submit',submitMoveClass);", 1)
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B6 student-management extraction")
+
+          core_exports = core_block.replace("async function loadAdminStudents", "export async function loadAdminStudents", 1)
+          core_exports = core_exports.replace("function renderAdminStudents", "export function renderAdminStudents", 1)
+
+          def listener_body(block, prefix):
+              suffix = "});\n"
+              if not block.startswith(prefix) or not block.endswith(suffix):
+                  raise SystemExit("Unexpected Phase 3B6 listener wrapper shape")
+              return block[len(prefix):-len(suffix)]
+
+          prepare_body = listener_body(prepare_listener, "$('transferInBtn').addEventListener('click',()=>{")
+          group_body = listener_body(group_listener, "$('tiGroup').addEventListener('change',()=>{")
+          transfer_in_body = listener_body(transfer_in_listener, "$('transferInForm').addEventListener('submit',async e=>{")
+          transfer_out_body = listener_body(transfer_out_listener, "$('transferOutForm').addEventListener('submit',async e=>{")
+          move_body = listener_body(move_listener + "\n", "$('moveClassForm').addEventListener('submit',async e=>{")
+
+          expected_module = (
+              "import { state } from './app-state.js';\n"
+              "import { bruneiToday } from './date-helpers.js';\n"
+              "import { $, esc, fillGroupedClasses } from './ui-helpers.js';\n\n"
+              "let sb;\n"
+              "let schoolId;\n"
+              "let adminClasses;\n"
+              "let showAdminMsg;\n\n"
+              "export function initStudentManagement(client,helpers){\n"
+              "  sb=client;\n"
+              "  schoolId=helpers.schoolId;\n"
+              "  adminClasses=helpers.adminClasses;\n"
+              "  showAdminMsg=helpers.showAdminMsg;\n"
+              "}\n\n"
+              + core_exports + "\n\n"
+              + "export function prepareTransferInDialog(){" + prepare_body + "}\n"
+              + "export function syncTransferInStats(){" + group_body + "}\n"
+              + "export async function submitTransferIn(e){" + transfer_in_body + "}\n"
+              + "export async function submitTransferOut(e){" + transfer_out_body + "}\n"
+              + "export async function submitMoveClass(e){" + move_body + "}\n"
+          )
+          current_module = Path("assets/js/student-management.js").read_text(encoding="utf-8")
+          if current_module != expected_module:
+              raise SystemExit("assets/js/student-management.js is not the exact approved Phase 3B6 extraction")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b6_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B5 must not change {path}")
+                  raise SystemExit(f"Phase 3B6 must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -414,3 +519,4 @@ jobs:
           node --check assets/js/ui-helpers.js
           node --check assets/js/auth-session.js
           node --check assets/js/attendance-register.js
+          node --check assets/js/student-management.js
