@@ -51,9 +51,7 @@ function openMoveClass(id){
   $('mcStudentLabel').textContent=s.full_name+' · currently '+s.class_code;fillGroupedClasses($('mcClass'),state.adminRoster.classes||[],{excludeId:s.class_id,compact:true});$('mcDate').value=bruneiToday();$('mcRemarks').value='';$('mcMsg').textContent='';$('moveClassDialog').showModal();
 }
 
-export function prepareTransferInDialog(){
-  $('transferInForm').reset();$('tiStats').checked=true;$('tiDate').value=bruneiToday();$('tiMsg').textContent='';fillGroupedClasses($('tiClass'),state.adminRoster?.classes||adminClasses(),{compact:true});$('transferInDialog').showModal();
-}
+export function prepareTransferInDialog(){$('transferInForm').reset();$('tiStats').checked=true;$('tiDate').value=bruneiToday();$('tiMsg').textContent='';fillGroupedClasses($('tiClass'),state.adminRoster?.classes||adminClasses(),{compact:true});$('transferInDialog').showModal();}
 export function syncTransferInStats(){$('tiStats').checked=$('tiGroup').value==='Mainstream';}
 export async function submitTransferIn(e){
   e.preventDefault();if(!confirm('Add '+$('tiName').value.trim()+' to '+$('tiClass').selectedOptions[0]?.textContent+' from '+$('tiDate').value+'?'))return;
