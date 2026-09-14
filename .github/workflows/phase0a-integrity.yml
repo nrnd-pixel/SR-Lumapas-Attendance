@@ -167,7 +167,6 @@ jobs:
         run: |
           import subprocess
 
-          phase3b2_sha = "ece37a0cfeaf996a20a1bfa27e11bef68c6d432b8"
           phase3b2_sha = "ece37a0cfeaf996a20c10a3f0cc638d35cea3c56"
           phase3b3a_sha = "8427442405d6d5a20debe430163b21c243f167ae"
           for sha in (phase3b2_sha, phase3b3a_sha):
@@ -458,7 +457,7 @@ jobs:
           core_exports = core_exports.replace("function renderAdminStudents", "export function renderAdminStudents", 1)
 
           def listener_body(block, prefix):
-              suffix = ");\n"
+              suffix = "});\n"
               if not block.startswith(prefix) or not block.endswith(suffix):
                   raise SystemExit("Unexpected Phase 3B6 listener wrapper shape")
               return block[len(prefix):-len(suffix)]
