@@ -225,3 +225,105 @@ test('attendance request serial protects an A to B to A selection sequence', asy
   await expect(page.locator('#classSelect')).toHaveValue('class-3a');
   await harness.expectNoProductionRequests();
 });
+
+test('correction preserves untouched PP and TM legacy codes', async ({ page }) => {
+  const original = registerFixture({
+    saved: true,
+    statuses: [
+      { status_code: 'PP', reason_code: null, note: null },
+      { status_code: 'TM', reason_code: null, note: null },
+      { status_code: 'P', reason_code: null, note: null }
+    ]
+  });
+  const corrected = registerFixture({
+    saved: true,
+    statuses: [
+      { status_code: 'PP', reason_code: null, note: null },
+      { status_code: 'TM', reason_code: null, note: null },
+      { status_code: 'L', reason_code: null, note: null }
+    ]
+  });
+  const harness = await openAuthorized(page, {
+    register: original,
+    registerSequence: [original, corrected],
+    extraRpc: {
+      attendance_save_register: { no_changes: false, correction: true, changed_records: 1 }
+    }
+  });
+
+  await page.locator('select.status').nth(2).selectOption('late');
+  await page.locator('#correctionReason').fill('Correct third pupil only');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#saveBtn').click();
+  await expect(page.locator('#dateBanner')).toContainText('Saved attendance loaded');
+
+  const calls = await harness.calls();
+  const save = calls.rpc.find(call => call.name === 'attendance_save_register');
+  expect(save.args.p_records).toEqual([
+    { enrolment_id: 'enrol-1', status_code: 'PP', reason_code: null, note: null },
+    { enrolment_id: 'enrol-2', status_code: 'TM', reason_code: null, note: null },
+    { enrolment_id: 'enrol-3', status_code: 'L', reason_code: null, note: null }
+  ]);
+  expect(save.args.p_correction_reason).toBe('Correct third pupil only');
+  await harness.expectNoProductionRequests();
+});
+
+test('OTHER absence reason requires a note before first save', async ({ page }) => {
+  const savedAfter = registerFixture({
+    saved: true,
+    statuses: [
+      { status_code: 'P', reason_code: null, note: null },
+      { status_code: 'A', reason_code: 'OTHER', note: 'Parent supplied details' },
+      { status_code: 'P', reason_code: null, note: null }
+    ]
+  });
+  const harness = await openAuthorized(page, {
+    register: registerFixture(),
+    registerSequence: [registerFixture(), savedAfter],
+    extraRpc: {
+      attendance_save_register: { no_changes: false, correction: false, recorded: 3 }
+    }
+  });
+
+  await page.locator('#allPresentBtn').click();
+  await page.locator('select.status').nth(1).selectOption('absent');
+  await page.locator('select.reason').nth(1).selectOption('OTHER');
+  await expect(page.locator('#saveBtn')).toBeDisabled();
+  await expect(page.locator('#saveTitle')).toHaveText('Attendance needs attention');
+
+  const note = page.locator('#studentList .student').nth(1).locator('textarea.note');
+  await expect(note).toBeVisible();
+  await note.fill('Parent supplied details');
+  await expect(page.locator('#saveBtn')).toBeEnabled();
+  await page.locator('#saveBtn').click();
+  await expect(page.locator('#dateBanner')).toContainText('Saved attendance loaded');
+
+  const calls = await harness.calls();
+  const save = calls.rpc.find(call => call.name === 'attendance_save_register');
+  expect(save.args.p_records[1]).toEqual({
+    enrolment_id: 'enrol-2',
+    status_code: 'A',
+    reason_code: 'OTHER',
+    note: 'Parent supplied details'
+  });
+  await harness.expectNoProductionRequests();
+});
+
+test('non-school day never enables attendance save', async ({ page }) => {
+  const nonSchool = {
+    ...registerFixture(),
+    is_school_day: false,
+    calendar_label: 'School holiday'
+  };
+  const harness = await openAuthorized(page, { register: nonSchool });
+
+  await expect(page.locator('#dateBanner')).toContainText('No attendance required: School holiday');
+  await expect(page.locator('#saveTitle')).toHaveText('No attendance required');
+  await page.locator('#allPresentBtn').click();
+  await expect(page.locator('#recordedCount')).toHaveText('3/3');
+  await expect(page.locator('#saveBtn')).toBeDisabled();
+
+  const calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_save_register')).toHaveLength(0);
+  await harness.expectNoProductionRequests();
+});
