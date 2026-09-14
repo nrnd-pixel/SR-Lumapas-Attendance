@@ -2,12 +2,9 @@ import { createAttendanceClient } from './supabase-client.js';
 import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';
 import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';
 import { $, esc, fillGroupedClasses } from './ui-helpers.js';
+import { initAuthSession, hideEntryViews, showLogin } from './auth-session.js';
 
-const initialRecoveryLink=
-  new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery'
-  || new URLSearchParams(window.location.search.slice(1)).get('type')==='recovery';
 const sb=createAttendanceClient();
-let passwordRecoveryActive=initialRecoveryLink;
 const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
 const PENDING_SIGNUP_VERSION=2;
 const routineOptions=[
@@ -125,24 +122,13 @@ function setBanner(text,type='info'){const b=$('dateBanner');b.className='banner
 
 async function init(){
   $('dateInput').value=bruneiToday();
-  sb.auth.onAuthStateChange((event,session)=>{
-    if(event==='PASSWORD_RECOVERY'){passwordRecoveryActive=true;showRecovery();return;}
-    if(event==='SIGNED_OUT'){passwordRecoveryActive=false;showLogin();return;}
-  });
-  const {data:{session}}=await sb.auth.getSession();
-  if(passwordRecoveryActive){showRecovery();return;}
-  if(session)await enterApp(); else showLogin();
+  await initAuthSession(sb,enterApp);
 }
-function hideEntryViews(){
-  ['loginView','signupView','teacherGateView','recoveryView','appView'].forEach(id=>$(id).classList.add('hidden'));
-}
-function showLogin(){hideEntryViews();$('loginView').classList.remove('hidden');}
 async function showSignup(){
   hideEntryViews();$('signupView').classList.remove('hidden');$('signupMsg').textContent='';
   try{const {classes}=await getSignupClasses();fillGroupedClasses($('signupClass'),classes,{compact:true});}
   catch(e){$('signupMsg').textContent='Could not load classes: '+e.message;}
 }
-function showRecovery(){hideEntryViews();$('recoveryView').classList.remove('hidden');}
 async function showTeacherGate(status){
   hideEntryViews();$('teacherGateView').classList.remove('hidden');state.teacherStatus=status;
   const req=status?.signup_request;
@@ -636,13 +622,6 @@ async function toggleTeacher(t){
   if(error){showAdminMsg('teacherAdminMsg',error.message,'warn');return;}showAdminMsg('teacherAdminMsg','Attendance access '+(next?'enabled.':'disabled.'),'ok');await loadAdminTeachers();
 }
 
-$('loginForm').addEventListener('submit',async e=>{
-  e.preventDefault();$('loginMsg').textContent='';$('loginBtn').disabled=true;$('loginBtn').innerHTML='<span class="spinner"></span> Signing in';
-  const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
-  $('loginBtn').disabled=false;$('loginBtn').textContent='Sign In';
-  if(error){$('loginMsg').textContent=error.message;return;}await enterApp();
-});
-
 $('openSignupBtn').addEventListener('click',showSignup);
 $('backToLoginBtn').addEventListener('click',showLogin);
 $('signupForm').addEventListener('submit',async e=>{
@@ -671,38 +650,6 @@ $('gateRequestForm').addEventListener('submit',async e=>{
 $('checkApprovalBtn').addEventListener('click',enterApp);
 $('gateSignOutBtn').addEventListener('click',async()=>{await sb.auth.signOut();showLogin();});
 
-$('forgotBtn').addEventListener('click',async()=>{
-  const email=$('email').value.trim();
-  if(!email){$('loginMsg').textContent='Enter your email address first.';return;}
-  $('forgotBtn').disabled=true;
-  $('loginMsg').textContent='Sending password reset email…';
-  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/'});
-  $('forgotBtn').disabled=false;
-  if(error){$('loginMsg').textContent=error.message;return;}
-  $('loginMsg').style.color='#147a4b';
-  $('loginMsg').textContent='Password reset email sent. Open the email on this phone and tap the recovery link.';
-});
-$('recoveryForm').addEventListener('submit',async e=>{
-  e.preventDefault();
-  $('recoveryMsg').textContent='';
-  if($('newPassword').value!==$('confirmPassword').value){
-    $('recoveryMsg').textContent='The two passwords do not match.';return;
-  }
-  $('recoveryBtn').disabled=true;
-  const {error}=await sb.auth.updateUser({password:$('newPassword').value});
-  if(error){$('recoveryBtn').disabled=false;$('recoveryMsg').textContent=error.message;return;}
-  const {error:signOutError}=await sb.auth.signOut();
-  $('recoveryBtn').disabled=false;
-  if(signOutError){
-    $('recoveryMsg').textContent='Password updated, but the recovery session could not be signed out. Please try again.';return;
-  }
-  passwordRecoveryActive=false;
-  $('recoveryForm').reset();
-  showLogin();
-  $('loginMsg').style.color='#147a4b';
-  $('loginMsg').textContent='Password updated successfully. Sign in with your new password.';
-});
-$('signOutBtn').addEventListener('click',async()=>{await sb.auth.signOut();showLogin();});
 $('classSelect').addEventListener('change',async e=>{
   if(!confirmDiscard()){
     if(state.currentClassId)e.target.value=state.currentClassId;

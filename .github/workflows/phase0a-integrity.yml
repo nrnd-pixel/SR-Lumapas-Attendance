@@ -27,6 +27,7 @@ jobs:
           test -f assets/js/app-state.js
           test -f assets/js/date-helpers.js
           test -f assets/js/ui-helpers.js
+          test -f assets/js/auth-session.js
           test -f netlify.toml
           test -f README.txt
 
@@ -204,14 +205,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B3A changed {path}")
 
-      - name: Verify exact Phase 3B3B UI-helper split
+      - name: Verify historical Phase 3B3B UI-helper split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b3a_sha = "8427442405d6d5a20debe430163b21c243f167ae"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b3a_sha}^{{commit}}"], check=True)
+          phase3b3b_sha = "53ed00e309f221a0f19e2ec446a41e01144177b0"
+          for sha in (phase3b3a_sha, phase3b3b_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:assets/js/main.js"], text=True)
 
           date_import = "import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';\n"
@@ -226,9 +228,9 @@ jobs:
 
           expected_main = before_main.replace(date_import, date_import + ui_import, 1)
           expected_main = expected_main.replace(dollar_decl, '', 1).replace(esc_decl, '', 1).replace(fill_block, '', 1)
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B3B UI-helper extraction")
+          phase3b3b_main = subprocess.check_output(["git", "show", f"{phase3b3b_sha}:assets/js/main.js"], text=True)
+          if phase3b3b_main != expected_main:
+              raise SystemExit("Historical Phase 3B3B main.js is not the exact approved UI-helper extraction")
 
           expected_ui = (
               dollar_decl.replace("const $", "export const $", 1)
@@ -237,15 +239,75 @@ jobs:
               + "\n"
               + fill_block.replace("function fillGroupedClasses", "export function fillGroupedClasses", 1)
           )
-          current_ui = Path("assets/js/ui-helpers.js").read_text(encoding="utf-8")
-          if current_ui != expected_ui:
-              raise SystemExit("assets/js/ui-helpers.js is not the exact approved Phase 3B3B helper module")
+          phase3b3b_ui = subprocess.check_output(["git", "show", f"{phase3b3b_sha}:assets/js/ui-helpers.js"], text=True)
+          if phase3b3b_ui != expected_ui:
+              raise SystemExit("Historical Phase 3B3B ui-helpers.js is not the exact approved helper module")
 
           for path in ("assets/js/date-helpers.js", "assets/js/app-state.js", "assets/js/supabase-client.js", "index.html"):
-              historical = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b3a_sha}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b3b_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B3B changed {path}")
+
+      - name: Verify exact Phase 3B4 auth-session split
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib
+          import subprocess
+
+          phase3b4_base = "cf753418b51e92ff91b223d448bbee2a783d3736"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b4_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b4_base}:assets/js/main.js"], text=True)
+
+          ui_import = "import { $, esc, fillGroupedClasses } from './ui-helpers.js';\n"
+          auth_import = "import { initAuthSession, hideEntryViews, showLogin } from './auth-session.js';\n"
+          recovery_state = "const initialRecoveryLink=\n  new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery'\n  || new URLSearchParams(window.location.search.slice(1)).get('type')==='recovery';\nconst sb=createAttendanceClient();\nlet passwordRecoveryActive=initialRecoveryLink;\n"
+          client_only = "const sb=createAttendanceClient();\n"
+          entry_block = "async function init(){\n  $('dateInput').value=bruneiToday();\n  sb.auth.onAuthStateChange((event,session)=>{\n    if(event==='PASSWORD_RECOVERY'){passwordRecoveryActive=true;showRecovery();return;}\n    if(event==='SIGNED_OUT'){passwordRecoveryActive=false;showLogin();return;}\n  });\n  const {data:{session}}=await sb.auth.getSession();\n  if(passwordRecoveryActive){showRecovery();return;}\n  if(session)await enterApp(); else showLogin();\n}\nfunction hideEntryViews(){\n  ['loginView','signupView','teacherGateView','recoveryView','appView'].forEach(id=>$(id).classList.add('hidden'));\n}\nfunction showLogin(){hideEntryViews();$('loginView').classList.remove('hidden');}\n"
+          entry_replacement = "async function init(){\n  $('dateInput').value=bruneiToday();\n  await initAuthSession(sb,enterApp);\n}\n"
+          show_recovery = "function showRecovery(){hideEntryViews();$('recoveryView').classList.remove('hidden');}\n"
+          login_listener = "$('loginForm').addEventListener('submit',async e=>{\n  e.preventDefault();$('loginMsg').textContent='';$('loginBtn').disabled=true;$('loginBtn').innerHTML='<span class=\"spinner\"></span> Signing in';\n  const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});\n  $('loginBtn').disabled=false;$('loginBtn').textContent='Sign In';\n  if(error){$('loginMsg').textContent=error.message;return;}await enterApp();\n});\n\n"
+          recovery_listeners = "$('forgotBtn').addEventListener('click',async()=>{\n  const email=$('email').value.trim();\n  if(!email){$('loginMsg').textContent='Enter your email address first.';return;}\n  $('forgotBtn').disabled=true;\n  $('loginMsg').textContent='Sending password reset email…';\n  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/'});\n  $('forgotBtn').disabled=false;\n  if(error){$('loginMsg').textContent=error.message;return;}\n  $('loginMsg').style.color='#147a4b';\n  $('loginMsg').textContent='Password reset email sent. Open the email on this phone and tap the recovery link.';\n});\n$('recoveryForm').addEventListener('submit',async e=>{\n  e.preventDefault();\n  $('recoveryMsg').textContent='';\n  if($('newPassword').value!==$('confirmPassword').value){\n    $('recoveryMsg').textContent='The two passwords do not match.';return;\n  }\n  $('recoveryBtn').disabled=true;\n  const {error}=await sb.auth.updateUser({password:$('newPassword').value});\n  if(error){$('recoveryBtn').disabled=false;$('recoveryMsg').textContent=error.message;return;}\n  const {error:signOutError}=await sb.auth.signOut();\n  $('recoveryBtn').disabled=false;\n  if(signOutError){\n    $('recoveryMsg').textContent='Password updated, but the recovery session could not be signed out. Please try again.';return;\n  }\n  passwordRecoveryActive=false;\n  $('recoveryForm').reset();\n  showLogin();\n  $('loginMsg').style.color='#147a4b';\n  $('loginMsg').textContent='Password updated successfully. Sign in with your new password.';\n});\n$('signOutBtn').addEventListener('click',async()=>{await sb.auth.signOut();showLogin();});\n"
+
+          for label, text in [
+              ('UI import', ui_import),
+              ('recovery/client state', recovery_state),
+              ('entry routing block', entry_block),
+              ('recovery view helper', show_recovery),
+              ('login listener', login_listener),
+              ('recovery listeners', recovery_listeners),
+          ]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Phase 3B4 base does not contain exactly one expected {label}")
+
+          expected_main = before_main.replace(ui_import, ui_import + auth_import, 1)
+          expected_main = expected_main.replace(recovery_state, client_only, 1)
+          expected_main = expected_main.replace(entry_block, entry_replacement, 1)
+          expected_main = expected_main.replace(show_recovery, '', 1)
+          expected_main = expected_main.replace(login_listener, '', 1)
+          expected_main = expected_main.replace(recovery_listeners, '', 1)
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B4 auth-session extraction")
+
+          auth_bytes = Path("assets/js/auth-session.js").read_bytes()
+          if hashlib.sha256(auth_bytes).hexdigest() != "c084de8ca11ba4959f67afc26bf1885b6c20c38688de46f197978fc5a5651b71":
+              raise SystemExit("assets/js/auth-session.js does not match the approved Phase 3B4 module")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b4_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B3B must not change {path}")
+                  raise SystemExit(f"Phase 3B4 must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -256,3 +318,4 @@ jobs:
           node --check assets/js/app-state.js
           node --check assets/js/date-helpers.js
           node --check assets/js/ui-helpers.js
+          node --check assets/js/auth-session.js
