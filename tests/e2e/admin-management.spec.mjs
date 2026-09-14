@@ -220,6 +220,70 @@ test('admin Move Class sends effective-date payload and refreshes pupil into des
   await harness.expectNoProductionRequests();
 });
 
+test('admin roster search and class filter escape hostile pupil text', async ({ page }) => {
+  const hostile = {
+    ...pupilA,
+    enrolment_id: 'enrol-hostile',
+    full_name: 'Synthetic <strong>Pupil</strong>',
+    student_ref: '<img src=x onerror=alert(1)>'
+  };
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_student_roster: roster([hostile, pupilB])
+    }
+  });
+
+  await page.locator('#studentsTabBtn').click();
+  const list = page.locator('#adminStudentList');
+  await expect(list).toContainText('Synthetic <strong>Pupil</strong>');
+  await expect(list).toContainText('<img src=x onerror=alert(1)>');
+  await expect(list.locator('strong')).toHaveCount(0);
+  await expect(list.locator('img')).toHaveCount(0);
+
+  await page.locator('#studentClassFilter').selectOption('class-3b');
+  await expect(list).toContainText(pupilB.full_name);
+  await expect(list).not.toContainText(hostile.full_name);
+  await expect(list.locator('.move-class')).toHaveCount(1);
+  await expect(list.locator('.transfer-out')).toHaveCount(1);
+
+  await page.locator('#studentSearch').fill('no such pupil');
+  await expect(list).toContainText('No pupils match this filter.');
+  await harness.expectNoProductionRequests();
+});
+
+test('Transfer In dialog preserves Brunei date and reporting-group statistics defaults', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_student_roster: roster([pupilA, pupilB])
+    }
+  });
+
+  await page.locator('#studentsTabBtn').click();
+  await page.locator('#transferInBtn').click();
+  await expect(page.locator('#transferInDialog')).toBeVisible();
+  const expectedDate = await page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Brunei', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date());
+    const values = {};
+    for (const part of parts) values[part.type] = part.value;
+    return values.year + '-' + values.month + '-' + values.day;
+  });
+  await expect(page.locator('#tiDate')).toHaveValue(expectedDate);
+  await expect(page.locator('#tiStats')).toBeChecked();
+  await expect(page.locator('#tiClass option')).toHaveCount(2);
+
+  await page.locator('#tiGroup').selectOption('SEN / UPK / PRAVOC');
+  await expect(page.locator('#tiStats')).not.toBeChecked();
+  await page.locator('#tiGroup').selectOption('Mainstream');
+  await expect(page.locator('#tiStats')).toBeChecked();
+  await harness.expectNoProductionRequests();
+});
+
 test('admin approves a teacher with the selected class and assignment type', async ({ page }) => {
   const request = teacherRequest();
   const approved = teacher({ userId: 'teacher-approved', email: request.email, active: true, classCode: '3B' });
