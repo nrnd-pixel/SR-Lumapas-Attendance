@@ -419,3 +419,64 @@ test('successful recovery rejects old password, accepts new password, and preser
   ]);
   await harness.expectNoProductionRequests();
 });
+
+test('password recovery stays on Set New Password if recovery sign-out fails', async ({ page }) => {
+  const harness = await installHarness(page, {
+    session: null,
+    auth: {
+      signOut: { error: { message: 'Synthetic recovery sign-out failure' } }
+    },
+    rpc: {}
+  });
+  await page.goto('/');
+  await page.evaluate(() => window.__attendanceTestEmitAuth(
+    'PASSWORD_RECOVERY',
+    { user: { email: 'teacher@example.test' } }
+  ));
+
+  await expect(page.locator('#recoveryView')).toBeVisible();
+  await page.locator('#newPassword').fill('new-password-1');
+  await page.locator('#confirmPassword').fill('new-password-1');
+  await page.locator('#recoveryBtn').click();
+
+  await expect(page.locator('#recoveryView')).toBeVisible();
+  await expect(page.locator('#loginView')).toBeHidden();
+  await expect(page.locator('#appView')).toBeHidden();
+  await expect(page.locator('#recoveryMsg')).toContainText('recovery session could not be signed out');
+
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'updateUser')).toEqual([
+    { method: 'updateUser', payload: { password: 'new-password-1' } }
+  ]);
+  expect(calls.auth.filter(call => call.method === 'signOut')).toHaveLength(1);
+  expect(calls.rpc).toEqual([]);
+  await harness.expectNoProductionRequests();
+});
+
+test('external signed-out event returns to login without additional Attendance RPCs', async ({ page }) => {
+  const harness = await installHarness(page, {
+    session: { user: { id: 'teacher-user', email: 'teacher@example.test' } },
+    rpc: {
+      attendance_teacher_status: { user_id: 'teacher-user', authorized: true, signup_request: null },
+      attendance_bootstrap: bootstrapFixture(),
+      attendance_load_register: registerFixture()
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#appView')).toBeVisible();
+  const before = await harness.calls();
+  expect(before.rpc.map(call => call.name)).toEqual([
+    'attendance_teacher_status',
+    'attendance_bootstrap',
+    'attendance_load_register'
+  ]);
+
+  await page.evaluate(() => window.__attendanceTestEmitAuth('SIGNED_OUT', null));
+  await expect(page.locator('#loginView')).toBeVisible();
+  await expect(page.locator('#appView')).toBeHidden();
+
+  const after = await harness.calls();
+  expect(after.rpc).toEqual(before.rpc);
+  await harness.expectNoProductionRequests();
+});
