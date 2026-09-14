@@ -28,6 +28,7 @@ jobs:
           test -f assets/js/date-helpers.js
           test -f assets/js/ui-helpers.js
           test -f assets/js/auth-session.js
+          test -f assets/js/attendance-register.js
           test -f netlify.toml
           test -f README.txt
 
@@ -249,15 +250,16 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B3B changed {path}")
 
-      - name: Verify exact Phase 3B4 auth-session split
+      - name: Verify historical Phase 3B4 auth-session split
         shell: python
         run: |
-          from pathlib import Path
           import hashlib
           import subprocess
 
           phase3b4_base = "cf753418b51e92ff91b223d448bbee2a783d3736"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b4_base}^{{commit}}"], check=True)
+          phase3b4_sha = "4cce7446a51671e35443247a755672d1f422d6c0"
+          for sha in (phase3b4_base, phase3b4_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b4_base}:assets/js/main.js"], text=True)
 
           ui_import = "import { $, esc, fillGroupedClasses } from './ui-helpers.js';\n"
@@ -288,13 +290,13 @@ jobs:
           expected_main = expected_main.replace(login_listener, '', 1)
           expected_main = expected_main.replace(recovery_listeners, '', 1)
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B4 auth-session extraction")
+          phase3b4_main = subprocess.check_output(["git", "show", f"{phase3b4_sha}:assets/js/main.js"], text=True)
+          if phase3b4_main != expected_main:
+              raise SystemExit("Historical Phase 3B4 main.js is not the exact approved auth-session extraction")
 
-          auth_bytes = Path("assets/js/auth-session.js").read_bytes()
+          auth_bytes = subprocess.check_output(["git", "show", f"{phase3b4_sha}:assets/js/auth-session.js"])
           if hashlib.sha256(auth_bytes).hexdigest() != "c084de8ca11ba4959f67afc26bf1885b6c20c38688de46f197978fc5a5651b71":
-              raise SystemExit("assets/js/auth-session.js does not match the approved Phase 3B4 module")
+              raise SystemExit("Historical Phase 3B4 auth-session.js does not match the approved module")
 
           for path in (
               "index.html",
@@ -304,10 +306,102 @@ jobs:
               "assets/js/ui-helpers.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b4_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b4_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b4_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B4 changed {path}")
+
+      - name: Verify exact Phase 3B5 attendance-register split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b5_base = "dc274130989e32d354ff4f28d8cc3c302010b7e5"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b5_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b5_base}:assets/js/main.js"], text=True)
+
+          auth_import = "import { initAuthSession, hideEntryViews, showLogin } from './auth-session.js';\n"
+          attendance_import = "import { initAttendanceRegister, setBusy, setBanner, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';\n"
+          client_decl = "const sb=createAttendanceClient();\n"
+          client_replacement = client_decl + "initAttendanceRegister(sb);\n"
+
+          for label, text in [('auth import', auth_import), ('client declaration', client_decl)]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Phase 3B5 base does not contain exactly one expected {label}")
+
+          def take_span(text, start_marker, end_marker):
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return text[start:end]
+
+          def remove_span(text, start_marker, end_marker, replacement=''):
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return text[:start] + replacement + text[end:]
+
+          routine_block = take_span(before_main, "const routineOptions=[", "function periodReportSelectionKey(){").rstrip('\n')
+          helper_block = take_span(before_main, "function groupFromCode(code){", "async function getSignupClasses(){").rstrip('\n')
+          busy_block = take_span(before_main, "function setBusy(flag){", "async function init(){").rstrip('\n')
+          attendance_block = take_span(before_main, "async function loadRegister(){", "function switchPanel(name){").rstrip('\n')
+
+          expected_main = before_main.replace(auth_import, auth_import + attendance_import, 1)
+          expected_main = expected_main.replace(client_decl, client_replacement, 1)
+          expected_main = remove_span(expected_main, "const routineOptions=[", "function periodReportSelectionKey(){", "\n")
+          expected_main = remove_span(expected_main, "function groupFromCode(code){", "async function getSignupClasses(){")
+          expected_main = remove_span(expected_main, "function setBusy(flag){", "async function init(){")
+          expected_main = remove_span(expected_main, "async function loadRegister(){", "function switchPanel(name){")
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B5 attendance-register extraction")
+
+          helper_exports = helper_block
+          helper_exports = helper_exports.replace("function hasUnsavedChanges", "export function hasUnsavedChanges", 1)
+          helper_exports = helper_exports.replace("function confirmDiscard", "export function confirmDiscard", 1)
+          busy_exports = busy_block
+          busy_exports = busy_exports.replace("function setBusy", "export function setBusy", 1)
+          busy_exports = busy_exports.replace("function setBanner", "export function setBanner", 1)
+          attendance_exports = attendance_block
+          for before, after in (
+              ("async function loadRegister", "export async function loadRegister"),
+              ("function markAllPresent", "export function markAllPresent"),
+              ("function clearAll", "export function clearAll"),
+              ("function updateSummary", "export function updateSummary"),
+              ("async function save", "export async function save"),
+          ):
+              if attendance_exports.count(before) != 1:
+                  raise SystemExit(f"Phase 3B5 attendance block does not contain exactly one {before}")
+              attendance_exports = attendance_exports.replace(before, after, 1)
+
+          expected_module = (
+              "import { state, beginRequest, isLatestRequest } from './app-state.js';\n"
+              "import { displayDate } from './date-helpers.js';\n"
+              "import { $, esc } from './ui-helpers.js';\n\n"
+              "let sb;\n\n"
+              "export function initAttendanceRegister(client){sb=client;}\n\n"
+              + routine_block + "\n\n"
+              + helper_exports + "\n\n"
+              + busy_exports + "\n\n"
+              + attendance_exports + "\n"
+          )
+          current_module = Path("assets/js/attendance-register.js").read_text(encoding="utf-8")
+          if current_module != expected_module:
+              raise SystemExit("assets/js/attendance-register.js is not the exact approved Phase 3B5 extraction")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b5_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B4 must not change {path}")
+                  raise SystemExit(f"Phase 3B5 must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -319,3 +413,4 @@ jobs:
           node --check assets/js/date-helpers.js
           node --check assets/js/ui-helpers.js
           node --check assets/js/auth-session.js
+          node --check assets/js/attendance-register.js
