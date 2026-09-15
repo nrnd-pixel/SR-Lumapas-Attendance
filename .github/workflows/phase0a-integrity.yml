@@ -32,6 +32,7 @@ jobs:
           test -f assets/js/student-management.js
           test -f assets/js/teacher-admin.js
           test -f assets/js/teacher-access.js
+          test -f assets/js/statistics.js
           test -f netlify.toml
           test -f README.txt
 
@@ -578,14 +579,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B7A changed {path}")
 
-      - name: Verify exact Phase 3B7B teacher-access split
+      - name: Verify historical Phase 3B7B teacher-access split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b7b_base = "3259ad542b9b1816ab98aafa2a502b833ee69a65"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b7b_base}^{{commit}}"], check=True)
+          phase3b7b_sha = "326e54ea0c529f538e68433f2f30b4588ec2fe71"
+          for sha in (phase3b7b_base, phase3b7b_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b7b_base}:assets/js/main.js"], text=True)
 
           teacher_import = "import { initTeacherAdmin, loadAdminTeachers } from './teacher-admin.js';\n"
@@ -632,9 +634,9 @@ jobs:
           expected_main = expected_main.replace(gate_listener, "$('gateRequestForm').addEventListener('submit',submitGateRequest);\n", 1)
           expected_main = expected_main.replace(gate_signout, "$('gateSignOutBtn').addEventListener('click',signOutTeacherGate);\n", 1)
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7B teacher-access extraction")
+          phase3b7b_main = subprocess.check_output(["git", "show", f"{phase3b7b_sha}:assets/js/main.js"], text=True)
+          if phase3b7b_main != expected_main:
+              raise SystemExit("Historical Phase 3B7B main.js is not the exact approved teacher-access extraction")
 
           signup_gate_exports = signup_gate_block.replace("async function showSignup", "export async function showSignup", 1)
           ensure_block = access_prefix.replace("async function enterApp(){", "export async function ensureTeacherAccess(){", 1) + "  return true;\n}\n"
@@ -662,9 +664,9 @@ jobs:
               + "export async function submitGateRequest(e){" + gate_body + "}\n"
               + "export async function signOutTeacherGate(){await sb.auth.signOut();showLogin();}\n"
           )
-          current_access = Path("assets/js/teacher-access.js").read_text(encoding="utf-8")
-          if current_access != expected_access:
-              raise SystemExit("assets/js/teacher-access.js is not the exact approved Phase 3B7B extraction")
+          phase3b7b_access = subprocess.check_output(["git", "show", f"{phase3b7b_sha}:assets/js/teacher-access.js"], text=True)
+          if phase3b7b_access != expected_access:
+              raise SystemExit("Historical Phase 3B7B teacher-access.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -678,10 +680,74 @@ jobs:
               "assets/js/teacher-admin.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b7b_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b7b_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b7b_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B7B changed {path}")
+
+      - name: Verify exact Phase 3B7C monthly-statistics split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b7c_base = "1912512eb344b17fa0f219268becfdac31bba00d"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b7c_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b7c_base}:assets/js/main.js"], text=True)
+
+          access_import = "import { initTeacherAccess, showSignup, ensureTeacherAccess, submitSignup, submitGateRequest, signOutTeacherGate } from './teacher-access.js';\n"
+          statistics_import = "import { initStatistics, loadMonthlyStats } from './statistics.js';\n"
+          access_init = "initTeacherAccess(sb);\n"
+          statistics_init = "initStatistics(sb);\n"
+
+          for label, text in [('teacher-access import', access_import), ('teacher-access init', access_init)]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Phase 3B7C base does not contain exactly one expected {label}")
+
+          stats_start = before_main.index("function setStatsBanner(text,type='info'){")
+          stats_end = before_main.index("function setDashboardBanner(text,type='info')", stats_start)
+          stats_block = before_main[stats_start:stats_end].rstrip('\n')
+
+          expected_main = before_main.replace(access_import, access_import + statistics_import, 1)
+          expected_main = expected_main.replace(access_init, access_init + statistics_init, 1)
+          stats_start = expected_main.index("function setStatsBanner(text,type='info'){")
+          stats_end = expected_main.index("function setDashboardBanner(text,type='info')", stats_start)
+          expected_main = expected_main[:stats_start] + expected_main[stats_end:]
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7C monthly-statistics extraction")
+
+          stats_exports = stats_block.replace("async function loadMonthlyStats", "export async function loadMonthlyStats", 1)
+          expected_statistics = (
+              "import { state, beginRequest, isLatestRequest } from './app-state.js';\n"
+              "import { displayDate, formatMonthLabel, shortDay } from './date-helpers.js';\n"
+              "import { $, esc } from './ui-helpers.js';\n\n"
+              "let sb;\n\n"
+              "export function initStatistics(client){sb=client;}\n\n"
+              + stats_exports + "\n"
+          )
+          current_statistics = Path("assets/js/statistics.js").read_text(encoding="utf-8")
+          if current_statistics != expected_statistics:
+              raise SystemExit("assets/js/statistics.js is not the exact approved Phase 3B7C extraction")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "assets/js/student-management.js",
+              "assets/js/teacher-admin.js",
+              "assets/js/teacher-access.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b7c_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B7B must not change {path}")
+                  raise SystemExit(f"Phase 3B7C must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -697,3 +763,4 @@ jobs:
           node --check assets/js/student-management.js
           node --check assets/js/teacher-admin.js
           node --check assets/js/teacher-access.js
+          node --check assets/js/statistics.js

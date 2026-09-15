@@ -108,6 +108,25 @@ function missingMonthlyStatsFixture() {
   };
 }
 
+function genderIncompleteStatsFixture() {
+  const data = februaryStatsFixture();
+  return {
+    ...data,
+    summary: {
+      ...data.summary,
+      cumulative_male: 210,
+      cumulative_female: 180
+    },
+    roster: {
+      ...data.roster,
+      male_pupils: 12,
+      female_pupils: 11,
+      gender_complete: false,
+      gender_unknown_pupils: 2
+    }
+  };
+}
+
 function dashboardFixture() {
   return {
     month: '2026-02',
@@ -321,6 +340,30 @@ test('monthly statistics keep a missing register blank and out of the completed 
   const statsCalls = calls.rpc.filter(call => call.name === 'attendance_monthly_class_stats');
   expect(statsCalls).toHaveLength(2);
   expect(statsCalls.at(-1).args).toEqual({ p_class_id: 'class-3b', p_month: '2026-02-01' });
+  await harness.expectNoProductionRequests();
+});
+
+test('monthly statistics warn when gender is incomplete while preserving complete totals', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: { attendance_monthly_class_stats: genderIncompleteStatsFixture() }
+  });
+
+  await page.locator('#statisticsTabBtn').click();
+  await expect(page.locator('#statisticsPanel')).toBeVisible();
+  await expect(page.locator('#genderStatsBanner')).toBeVisible();
+  await expect(page.locator('#genderStatsBanner')).toContainText('Gender is not recorded for 2 pupils');
+  await expect(page.locator('#genderStatsBanner')).toContainText('Male/female figures include known genders only; Total remains complete.');
+  await expect(page.locator('#statsMale')).toHaveText('210');
+  await expect(page.locator('#statsFemale')).toHaveText('180');
+  await expect(page.locator('#statsAll')).toHaveText('398');
+  await expect(page.locator('#statsPossible')).toHaveText('425');
+  await expect(page.locator('#statsRoster')).toHaveText('25 pupils · 12 male · 11 female');
+
+  const calls = await harness.calls();
+  const stats = calls.rpc.find(call => call.name === 'attendance_monthly_class_stats');
+  expect(stats.args).toEqual({ p_class_id: 'class-3a', p_month: '2026-02-01' });
   await harness.expectNoProductionRequests();
 });
 
