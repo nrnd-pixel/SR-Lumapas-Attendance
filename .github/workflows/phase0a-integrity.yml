@@ -34,6 +34,7 @@ jobs:
           test -f assets/js/teacher-access.js
           test -f assets/js/statistics.js
           test -f assets/js/admin-dashboard.js
+          test -f assets/js/period-reports.js
           test -f netlify.toml
           test -f README.txt
 
@@ -751,14 +752,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B7C changed {path}")
 
-      - name: Verify exact Phase 3B7D admin-dashboard split
+      - name: Verify historical Phase 3B7D admin-dashboard split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b7d_base = "18ddf13a3292772646bb8885b2470f3e4a081f64"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b7d_base}^{{commit}}"], check=True)
+          phase3b7d_sha = "52d4dd245e06cd0a3e42a5c7da15eeff121a9055"
+          for sha in (phase3b7d_base, phase3b7d_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b7d_base}:assets/js/main.js"], text=True)
 
           statistics_import = "import { initStatistics, loadMonthlyStats } from './statistics.js';\n"
@@ -784,9 +786,9 @@ jobs:
           dashboard_end = expected_main.index("function setReportBanner(text,type='info')", dashboard_start)
           expected_main = expected_main[:dashboard_start] + orchestration_helper + expected_main[dashboard_end:]
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7D admin-dashboard extraction")
+          historical_main = subprocess.check_output(["git", "show", f"{phase3b7d_sha}:assets/js/main.js"], text=True)
+          if historical_main != expected_main:
+              raise SystemExit("Historical Phase 3B7D main.js is not the exact approved admin-dashboard extraction")
 
           dashboard_exports = dashboard_block.replace("async function loadAdminDashboard", "export async function loadAdminDashboard", 1)
           dashboard_exports = dashboard_exports.replace(old_navigation, "    openStatisticsForClass(b.dataset.class,data.month);\n", 1)
@@ -804,9 +806,9 @@ jobs:
               "}\n\n"
               + dashboard_exports + "\n"
           )
-          current_dashboard = Path("assets/js/admin-dashboard.js").read_text(encoding="utf-8")
-          if current_dashboard != expected_dashboard:
-              raise SystemExit("assets/js/admin-dashboard.js is not the exact approved Phase 3B7D extraction")
+          historical_dashboard = subprocess.check_output(["git", "show", f"{phase3b7d_sha}:assets/js/admin-dashboard.js"], text=True)
+          if historical_dashboard != expected_dashboard:
+              raise SystemExit("Historical Phase 3B7D admin-dashboard.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -822,10 +824,109 @@ jobs:
               "assets/js/statistics.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b7d_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b7d_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b7d_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B7D changed {path}")
+
+      - name: Verify exact Phase 3B7E period-reports split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b7e_base = "c59dd2965b6ab2c6aef0e6340df8ebac6e73ef78"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b7e_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b7e_base}:assets/js/main.js"], text=True)
+
+          old_state_import = "import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';\n"
+          new_state_import = "import { state } from './app-state.js';\n"
+          old_date_import = "import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';\n"
+          new_date_import = "import { bruneiToday } from './date-helpers.js';\n"
+          old_ui_import = "import { $, esc, fillGroupedClasses } from './ui-helpers.js';\n"
+          new_ui_import = "import { $, fillGroupedClasses } from './ui-helpers.js';\n"
+          dashboard_import = "import { initAdminDashboard, loadAdminDashboard } from './admin-dashboard.js';\n"
+          report_import = "import { initPeriodReports, loadReportOptions, syncReportTypeUI, invalidatePeriodReport, loadPeriodReport, exportPeriodReport } from './period-reports.js';\n"
+          dashboard_init = "initAdminDashboard(sb,{schoolId,openStatisticsForClass});\n"
+          report_init = "initPeriodReports(sb);\n"
+
+          for label, text in (
+              ('state import', old_state_import),
+              ('date import', old_date_import),
+              ('UI import', old_ui_import),
+              ('dashboard import', dashboard_import),
+              ('dashboard init', dashboard_init),
+          ):
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Phase 3B7E base does not contain exactly one expected {label}")
+
+          selection_start = before_main.index("function periodReportSelectionKey(){")
+          selection_end = before_main.index("async function init(){", selection_start)
+          selection_block = before_main[selection_start:selection_end].rstrip('\n')
+          report_start = before_main.index("function setReportBanner(text,type='info'){")
+          report_end = before_main.index("function schoolId(){", report_start)
+          report_block = before_main[report_start:report_end].rstrip('\n')
+
+          expected_main = before_main.replace(old_state_import, new_state_import, 1)
+          expected_main = expected_main.replace(old_date_import, new_date_import, 1)
+          expected_main = expected_main.replace(old_ui_import, new_ui_import, 1)
+          expected_main = expected_main.replace(dashboard_import, dashboard_import + report_import, 1)
+          expected_main = expected_main.replace(dashboard_init, dashboard_init + report_init, 1)
+          selection_start = expected_main.index("function periodReportSelectionKey(){")
+          selection_end = expected_main.index("async function init(){", selection_start)
+          expected_main = expected_main[:selection_start] + expected_main[selection_end:]
+          report_start = expected_main.index("function setReportBanner(text,type='info'){")
+          report_end = expected_main.index("function schoolId(){", report_start)
+          expected_main = expected_main[:report_start] + expected_main[report_end:]
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7E period-reports extraction")
+
+          selection_exports = selection_block.replace("function invalidatePeriodReport", "export function invalidatePeriodReport", 1)
+          report_exports = report_block
+          for before, after in (
+              ("function syncReportTypeUI", "export function syncReportTypeUI"),
+              ("async function loadReportOptions", "export async function loadReportOptions"),
+              ("async function loadPeriodReport", "export async function loadPeriodReport"),
+              ("function exportPeriodReport", "export function exportPeriodReport"),
+          ):
+              if report_exports.count(before) != 1:
+                  raise SystemExit(f"Phase 3B7E report block does not contain exactly one {before}")
+              report_exports = report_exports.replace(before, after, 1)
+
+          expected_reports = (
+              "import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';\n"
+              "import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';\n"
+              "import { $, esc } from './ui-helpers.js';\n\n"
+              "let sb;\n\n"
+              "export function initPeriodReports(client){sb=client;}\n\n"
+              + selection_exports + "\n\n"
+              + report_exports + "\n"
+          )
+          current_reports = Path("assets/js/period-reports.js").read_text(encoding="utf-8")
+          if current_reports != expected_reports:
+              raise SystemExit("assets/js/period-reports.js is not the exact approved Phase 3B7E extraction")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "assets/js/student-management.js",
+              "assets/js/teacher-admin.js",
+              "assets/js/teacher-access.js",
+              "assets/js/statistics.js",
+              "assets/js/admin-dashboard.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b7e_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B7D must not change {path}")
+                  raise SystemExit(f"Phase 3B7E must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -843,3 +944,4 @@ jobs:
           node --check assets/js/teacher-access.js
           node --check assets/js/statistics.js
           node --check assets/js/admin-dashboard.js
+          node --check assets/js/period-reports.js
