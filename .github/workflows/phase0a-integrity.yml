@@ -33,6 +33,7 @@ jobs:
           test -f assets/js/teacher-admin.js
           test -f assets/js/teacher-access.js
           test -f assets/js/statistics.js
+          test -f assets/js/admin-dashboard.js
           test -f netlify.toml
           test -f README.txt
 
@@ -685,14 +686,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B7B changed {path}")
 
-      - name: Verify exact Phase 3B7C monthly-statistics split
+      - name: Verify historical Phase 3B7C monthly-statistics split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b7c_base = "1912512eb344b17fa0f219268becfdac31bba00d"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b7c_base}^{{commit}}"], check=True)
+          phase3b7c_sha = "bf7379332a35f1ea9f859ea2ade6b6e67cdf3c73"
+          for sha in (phase3b7c_base, phase3b7c_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b7c_base}:assets/js/main.js"], text=True)
 
           access_import = "import { initTeacherAccess, showSignup, ensureTeacherAccess, submitSignup, submitGateRequest, signOutTeacherGate } from './teacher-access.js';\n"
@@ -714,9 +716,9 @@ jobs:
           stats_end = expected_main.index("function setDashboardBanner(text,type='info')", stats_start)
           expected_main = expected_main[:stats_start] + expected_main[stats_end:]
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7C monthly-statistics extraction")
+          historical_main = subprocess.check_output(["git", "show", f"{phase3b7c_sha}:assets/js/main.js"], text=True)
+          if historical_main != expected_main:
+              raise SystemExit("Historical Phase 3B7C main.js is not the exact approved monthly-statistics extraction")
 
           stats_exports = stats_block.replace("async function loadMonthlyStats", "export async function loadMonthlyStats", 1)
           expected_statistics = (
@@ -727,9 +729,9 @@ jobs:
               "export function initStatistics(client){sb=client;}\n\n"
               + stats_exports + "\n"
           )
-          current_statistics = Path("assets/js/statistics.js").read_text(encoding="utf-8")
-          if current_statistics != expected_statistics:
-              raise SystemExit("assets/js/statistics.js is not the exact approved Phase 3B7C extraction")
+          historical_statistics = subprocess.check_output(["git", "show", f"{phase3b7c_sha}:assets/js/statistics.js"], text=True)
+          if historical_statistics != expected_statistics:
+              raise SystemExit("Historical Phase 3B7C statistics.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -744,10 +746,86 @@ jobs:
               "assets/js/teacher-access.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b7c_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b7c_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b7c_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B7C changed {path}")
+
+      - name: Verify exact Phase 3B7D admin-dashboard split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b7d_base = "18ddf13a3292772646bb8885b2470f3e4a081f64"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b7d_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b7d_base}:assets/js/main.js"], text=True)
+
+          statistics_import = "import { initStatistics, loadMonthlyStats } from './statistics.js';\n"
+          dashboard_import = "import { initAdminDashboard, loadAdminDashboard } from './admin-dashboard.js';\n"
+          statistics_init = "initStatistics(sb);\n"
+          dashboard_init = "initAdminDashboard(sb,{schoolId,openStatisticsForClass});\n"
+
+          for label, text in [('statistics import', statistics_import), ('statistics init', statistics_init)]:
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Phase 3B7D base does not contain exactly one expected {label}")
+
+          dashboard_start = before_main.index("function setDashboardBanner(text,type='info'){")
+          dashboard_end = before_main.index("function setReportBanner(text,type='info')", dashboard_start)
+          dashboard_block = before_main[dashboard_start:dashboard_end].rstrip('\n')
+          old_navigation = "    $('statsClassSelect').value=b.dataset.class;$('statsMonth').value=data.month;switchPanel('statistics');\n"
+          if dashboard_block.count(old_navigation) != 1:
+              raise SystemExit("Phase 3B7D base does not contain the expected unique Dashboard → Statistics navigation body")
+
+          orchestration_helper = "function openStatisticsForClass(classId,month){\n  $('statsClassSelect').value=classId;$('statsMonth').value=month;switchPanel('statistics');\n}\n"
+          expected_main = before_main.replace(statistics_import, statistics_import + dashboard_import, 1)
+          expected_main = expected_main.replace(statistics_init, statistics_init + dashboard_init, 1)
+          dashboard_start = expected_main.index("function setDashboardBanner(text,type='info'){")
+          dashboard_end = expected_main.index("function setReportBanner(text,type='info')", dashboard_start)
+          expected_main = expected_main[:dashboard_start] + orchestration_helper + expected_main[dashboard_end:]
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7D admin-dashboard extraction")
+
+          dashboard_exports = dashboard_block.replace("async function loadAdminDashboard", "export async function loadAdminDashboard", 1)
+          dashboard_exports = dashboard_exports.replace(old_navigation, "    openStatisticsForClass(b.dataset.class,data.month);\n", 1)
+          expected_dashboard = (
+              "import { state, beginRequest, isLatestRequest } from './app-state.js';\n"
+              "import { displayDate, formatMonthLabel } from './date-helpers.js';\n"
+              "import { $, esc } from './ui-helpers.js';\n\n"
+              "let sb;\n"
+              "let schoolId;\n"
+              "let openStatisticsForClass;\n\n"
+              "export function initAdminDashboard(client,helpers){\n"
+              "  sb=client;\n"
+              "  schoolId=helpers.schoolId;\n"
+              "  openStatisticsForClass=helpers.openStatisticsForClass;\n"
+              "}\n\n"
+              + dashboard_exports + "\n"
+          )
+          current_dashboard = Path("assets/js/admin-dashboard.js").read_text(encoding="utf-8")
+          if current_dashboard != expected_dashboard:
+              raise SystemExit("assets/js/admin-dashboard.js is not the exact approved Phase 3B7D extraction")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "assets/js/student-management.js",
+              "assets/js/teacher-admin.js",
+              "assets/js/teacher-access.js",
+              "assets/js/statistics.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b7d_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B7C must not change {path}")
+                  raise SystemExit(f"Phase 3B7D must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -764,3 +842,4 @@ jobs:
           node --check assets/js/teacher-admin.js
           node --check assets/js/teacher-access.js
           node --check assets/js/statistics.js
+          node --check assets/js/admin-dashboard.js
