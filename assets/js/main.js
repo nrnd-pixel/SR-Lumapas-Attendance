@@ -11,6 +11,7 @@ import { initStatistics, loadMonthlyStats } from './statistics.js';
 import { initAdminDashboard, loadAdminDashboard } from './admin-dashboard.js';
 import { initPeriodReports, loadReportOptions, syncReportTypeUI, invalidatePeriodReport, loadPeriodReport, exportPeriodReport } from './period-reports.js';
 import { initAppBootstrap, enterApp, schoolId, adminClasses, showAdminMsg } from './app-bootstrap.js';
+import { switchPanel, openStatisticsForClass } from './app-navigation.js';
 
 const sb=createAttendanceClient();
 initAppBootstrap(sb,{switchPanel});
@@ -27,18 +28,6 @@ async function init(){
   await initAuthSession(sb,enterApp);
 }
 
-function switchPanel(name){
-  const map={attendance:'attendancePanel',dashboard:'dashboardPanel',statistics:'statisticsPanel',reports:'reportsPanel',students:'studentsPanel',teachers:'teachersPanel'};
-  Object.entries(map).forEach(([k,id])=>$(id).classList.toggle('hidden',k!==name));
-  ['attendance','dashboard','statistics','reports','students','teachers'].forEach(k=>$(k+'TabBtn').classList.toggle('active',k===name));
-  if(name==='dashboard')loadAdminDashboard();
-  if(name==='statistics'){if(!$('statsClassSelect').value)$('statsClassSelect').value=$('classSelect').value;loadMonthlyStats();}
-  if(name==='reports'){if(!$('reportClassSelect').value)$('reportClassSelect').value=$('classSelect').value;loadReportOptions();}
-  if(name==='students')loadAdminStudents();if(name==='teachers')loadAdminTeachers();
-}
-function openStatisticsForClass(classId,month){
-  $('statsClassSelect').value=classId;$('statsMonth').value=month;switchPanel('statistics');
-}
 
 $('openSignupBtn').addEventListener('click',showSignup);
 $('backToLoginBtn').addEventListener('click',showLogin);

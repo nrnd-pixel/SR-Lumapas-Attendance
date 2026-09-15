@@ -36,6 +36,7 @@ jobs:
           test -f assets/js/admin-dashboard.js
           test -f assets/js/period-reports.js
           test -f assets/js/app-bootstrap.js
+          test -f assets/js/app-navigation.js
           test -f netlify.toml
           test -f README.txt
 
@@ -930,14 +931,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B7E changed {path}")
 
-      - name: Verify exact Phase 3B7F1 app-bootstrap split
+      - name: Verify historical Phase 3B7F1 app-bootstrap split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b7f1_base = "09f86472da499811af416dee8176c58ca5e5e06c"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b7f1_base}^{{commit}}"], check=True)
+          phase3b7f1_sha = "3c72aca9e043b734640b1d728d1910cf02632af3"
+          for sha in (phase3b7f1_base, phase3b7f1_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b7f1_base}:assets/js/main.js"], text=True)
 
           old_ui_import = "import { $, fillGroupedClasses } from './ui-helpers.js';\n"
@@ -984,9 +986,9 @@ jobs:
           helpers_end = expected_main.index("$('openSignupBtn').addEventListener('click',showSignup);", helpers_start)
           expected_main = expected_main[:helpers_start] + "\n" + expected_main[helpers_end:]
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7F1 app-bootstrap extraction")
+          historical_main = subprocess.check_output(["git", "show", f"{phase3b7f1_sha}:assets/js/main.js"], text=True)
+          if historical_main != expected_main:
+              raise SystemExit("Historical Phase 3B7F1 main.js is not the exact approved app-bootstrap extraction")
 
           enter_exports = enter_block.replace("async function enterApp", "export async function enterApp", 1)
           helper_exports = helpers_block
@@ -1015,9 +1017,9 @@ jobs:
               + enter_exports + "\n\n"
               + helper_exports + "\n"
           )
-          current_bootstrap = Path("assets/js/app-bootstrap.js").read_text(encoding="utf-8")
-          if current_bootstrap != expected_bootstrap:
-              raise SystemExit("assets/js/app-bootstrap.js is not the exact approved Phase 3B7F1 module")
+          historical_bootstrap = subprocess.check_output(["git", "show", f"{phase3b7f1_sha}:assets/js/app-bootstrap.js"], text=True)
+          if historical_bootstrap != expected_bootstrap:
+              raise SystemExit("Historical Phase 3B7F1 app-bootstrap.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -1035,10 +1037,81 @@ jobs:
               "assets/js/period-reports.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b7f1_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b7f1_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b7f1_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B7F1 changed {path}")
+
+      - name: Verify exact Phase 3B7F2 app-navigation split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b7f2_base = "cf939c3582d4db2c2be7a503b4355cfd9066af55"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b7f2_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b7f2_base}:assets/js/main.js"], text=True)
+
+          bootstrap_import = "import { initAppBootstrap, enterApp, schoolId, adminClasses, showAdminMsg } from './app-bootstrap.js';\n"
+          navigation_import = "import { switchPanel, openStatisticsForClass } from './app-navigation.js';\n"
+          listener_marker = "$('openSignupBtn').addEventListener('click',showSignup);"
+          if before_main.count(bootstrap_import) != 1:
+              raise SystemExit("Phase 3B7F2 base does not contain exactly one app-bootstrap import")
+          if before_main.count("function switchPanel(name){") != 1 or before_main.count("function openStatisticsForClass(classId,month){") != 1:
+              raise SystemExit("Phase 3B7F2 base does not contain the expected unique navigation functions")
+          if before_main.count(listener_marker) != 1:
+              raise SystemExit("Phase 3B7F2 base does not contain the expected listener marker")
+
+          navigation_start = before_main.index("function switchPanel(name){")
+          navigation_end = before_main.index(listener_marker, navigation_start)
+          navigation_block = before_main[navigation_start:navigation_end].rstrip('\n')
+
+          expected_main = before_main.replace(bootstrap_import, bootstrap_import + navigation_import, 1)
+          navigation_start = expected_main.index("function switchPanel(name){")
+          navigation_end = expected_main.index(listener_marker, navigation_start)
+          expected_main = expected_main[:navigation_start] + "\n" + expected_main[navigation_end:]
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7F2 app-navigation extraction")
+
+          navigation_exports = navigation_block
+          navigation_exports = navigation_exports.replace("function switchPanel", "export function switchPanel", 1)
+          navigation_exports = navigation_exports.replace("function openStatisticsForClass", "export function openStatisticsForClass", 1)
+          expected_navigation = (
+              "import { $ } from './ui-helpers.js';\n"
+              "import { loadAdminDashboard } from './admin-dashboard.js';\n"
+              "import { loadMonthlyStats } from './statistics.js';\n"
+              "import { loadReportOptions } from './period-reports.js';\n"
+              "import { loadAdminStudents } from './student-management.js';\n"
+              "import { loadAdminTeachers } from './teacher-admin.js';\n\n"
+              + navigation_exports + "\n"
+          )
+          current_navigation = Path("assets/js/app-navigation.js").read_text(encoding="utf-8")
+          if current_navigation != expected_navigation:
+              raise SystemExit("assets/js/app-navigation.js is not the exact approved Phase 3B7F2 module")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "assets/js/student-management.js",
+              "assets/js/teacher-admin.js",
+              "assets/js/teacher-access.js",
+              "assets/js/statistics.js",
+              "assets/js/admin-dashboard.js",
+              "assets/js/period-reports.js",
+              "assets/js/app-bootstrap.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b7f2_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B7F1 must not change {path}")
+                  raise SystemExit(f"Phase 3B7F2 must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -1058,3 +1131,4 @@ jobs:
           node --check assets/js/admin-dashboard.js
           node --check assets/js/period-reports.js
           node --check assets/js/app-bootstrap.js
+          node --check assets/js/app-navigation.js
