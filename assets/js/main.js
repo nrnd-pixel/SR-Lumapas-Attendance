@@ -1,17 +1,19 @@
 import { createAttendanceClient } from './supabase-client.js';
 import { state } from './app-state.js';
 import { bruneiToday } from './date-helpers.js';
-import { $, fillGroupedClasses } from './ui-helpers.js';
-import { initAuthSession, hideEntryViews, showLogin } from './auth-session.js';
-import { initAttendanceRegister, setBusy, setBanner, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';
+import { $ } from './ui-helpers.js';
+import { initAuthSession, showLogin } from './auth-session.js';
+import { initAttendanceRegister, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';
 import { initStudentManagement, loadAdminStudents, renderAdminStudents, prepareTransferInDialog, syncTransferInStats, submitTransferIn, submitTransferOut, submitMoveClass } from './student-management.js';
 import { initTeacherAdmin, loadAdminTeachers } from './teacher-admin.js';
-import { initTeacherAccess, showSignup, ensureTeacherAccess, submitSignup, submitGateRequest, signOutTeacherGate } from './teacher-access.js';
+import { initTeacherAccess, showSignup, submitSignup, submitGateRequest, signOutTeacherGate } from './teacher-access.js';
 import { initStatistics, loadMonthlyStats } from './statistics.js';
 import { initAdminDashboard, loadAdminDashboard } from './admin-dashboard.js';
 import { initPeriodReports, loadReportOptions, syncReportTypeUI, invalidatePeriodReport, loadPeriodReport, exportPeriodReport } from './period-reports.js';
+import { initAppBootstrap, enterApp, schoolId, adminClasses, showAdminMsg } from './app-bootstrap.js';
 
 const sb=createAttendanceClient();
+initAppBootstrap(sb,{switchPanel});
 initAttendanceRegister(sb);
 initStudentManagement(sb,{schoolId,adminClasses,showAdminMsg});
 initTeacherAdmin(sb,{adminClasses,showAdminMsg});
@@ -23,30 +25,6 @@ initPeriodReports(sb);
 async function init(){
   $('dateInput').value=bruneiToday();
   await initAuthSession(sb,enterApp);
-}
-async function enterApp(){
-  if(!(await ensureTeacherAccess()))return;
-  hideEntryViews();$('appView').classList.remove('hidden');
-  setBusy(true);setBanner('Loading teacher access…','info');
-  const boot=await sb.rpc('attendance_bootstrap');
-  if(boot.error){setBanner(boot.error.message,'warn');setBusy(false);return;}
-  const data=boot.data;state.bootstrap=data;
-  const user=data.user||{};const classes=data.classes||[];
-  $('userLine').textContent=user.email||'Teacher';
-  const role=user.school_role==='admin'?'Admin':'Teacher';
-  $('rolePill').textContent=user.all_classes?role+' · All Classes':role;$('rolePill').classList.remove('hidden');
-  $('schoolScope').textContent=user.all_classes?'School-wide access · '+classes.length+' classes':'Assigned classes · '+classes.length;
-  const isAdmin=user.school_role==='admin' || user.all_classes;
-  $('dashboardTabBtn').classList.toggle('hidden',!isAdmin);$('studentsTabBtn').classList.toggle('hidden',!isAdmin);$('teachersTabBtn').classList.toggle('hidden',!isAdmin);
-  $('dashboardMonth').value=bruneiToday().slice(0,7);
-  fillGroupedClasses($('classSelect'),classes,{compact:false});
-  fillGroupedClasses($('statsClassSelect'),classes,{compact:false});
-  fillGroupedClasses($('reportClassSelect'),classes,{compact:false});
-  $('statsMonth').value=bruneiToday().slice(0,7);$('reportAsOf').value=bruneiToday();
-  if(!classes.length){setBanner('No attendance class has been assigned to this account.','warn');setBusy(false);return;}
-  const saved=localStorage.getItem('srlAttendanceLastClass');
-  const preferred=classes.find(c=>c.id===saved)||classes.find(c=>c.class_code==='3A')||classes[0];$('classSelect').value=preferred.id;$('statsClassSelect').value=preferred.id;$('reportClassSelect').value=preferred.id;
-  setBusy(false);switchPanel('attendance');await loadRegister();
 }
 
 function switchPanel(name){
@@ -61,9 +39,6 @@ function switchPanel(name){
 function openStatisticsForClass(classId,month){
   $('statsClassSelect').value=classId;$('statsMonth').value=month;switchPanel('statistics');
 }
-function schoolId(){return state.bootstrap?.classes?.[0]?.school_id||null;}
-function adminClasses(){return state.bootstrap?.classes||[];}
-function showAdminMsg(id,text,type='info'){const el=$(id);el.textContent=text;el.className='banner '+type;el.classList.remove('hidden');}
 
 $('openSignupBtn').addEventListener('click',showSignup);
 $('backToLoginBtn').addEventListener('click',showLogin);
