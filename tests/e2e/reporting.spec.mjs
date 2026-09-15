@@ -581,3 +581,40 @@ test('newer YTD report remains rendered when an older term report finishes last'
   await expect(page.locator('#exportReportBtn')).toBeEnabled();
   await harness.expectNoProductionRequests();
 });
+
+test('dashboard View opens the selected class and dashboard month in Statistics', async ({ page }) => {
+  const marchStats = {
+    ...missingMonthlyStatsFixture(),
+    month: '2026-03',
+    as_of_date: '2026-03-05'
+  };
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_school_dashboard: marchDashboardFixture(),
+      attendance_monthly_class_stats: marchStats
+    }
+  });
+
+  await page.locator('#dashboardMonth').evaluate(element => {
+    element.value = '2026-03';
+  });
+  await page.locator('#dashboardTabBtn').click();
+  await expect(page.locator('#dashboardMonthLabel')).toHaveText('March 2026');
+
+  const row3B = page.locator('#dashboardClassBody tr').filter({ hasText: '3B' });
+  await row3B.locator('.dashboard-view').click();
+
+  await expect(page.locator('#statisticsPanel')).toBeVisible();
+  await expect(page.locator('#statsClassSelect')).toHaveValue('class-3b');
+  await expect(page.locator('#statsMonth')).toHaveValue('2026-03');
+  await expect(page.locator('#statsCumulative')).toHaveText('90');
+
+  const calls = await harness.calls();
+  const dashboard = calls.rpc.find(call => call.name === 'attendance_admin_school_dashboard');
+  const stats = calls.rpc.find(call => call.name === 'attendance_monthly_class_stats');
+  expect(dashboard.args).toEqual({ p_school_id: 'school-test', p_month: '2026-03-01' });
+  expect(stats.args).toEqual({ p_class_id: 'class-3b', p_month: '2026-03-01' });
+  await harness.expectNoProductionRequests();
+});
