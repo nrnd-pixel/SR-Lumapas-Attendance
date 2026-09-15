@@ -277,7 +277,6 @@ function reportOptions3BFixture() {
     ]
   };
 }
-
 function marchDashboardFixture() {
   const data = dashboardFixture();
   return {
@@ -616,5 +615,38 @@ test('dashboard View opens the selected class and dashboard month in Statistics'
   const stats = calls.rpc.find(call => call.name === 'attendance_monthly_class_stats');
   expect(dashboard.args).toEqual({ p_school_id: 'school-test', p_month: '2026-03-01' });
   expect(stats.args).toEqual({ p_class_id: 'class-3b', p_month: '2026-03-01' });
+  await harness.expectNoProductionRequests();
+});
+
+test('changing a loaded report period invalidates the old result and disables CSV export until reload', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_class_report_options: reportOptionsFixture(),
+      attendance_class_period_report: termReportFixture()
+    }
+  });
+
+  await page.locator('#reportsTabBtn').click();
+  await expect(page.locator('#reportTermSelect')).toHaveValue('term-1');
+  await page.locator('#loadReportBtn').click();
+  await expect(page.locator('#reportPeriodLabel')).toHaveText('Term 1');
+  await expect(page.locator('#reportCumulative')).toHaveText('1051');
+  await expect(page.locator('#exportReportBtn')).toBeEnabled();
+
+  await page.locator('#reportType').selectOption('ytd');
+
+  await expect(page.locator('#reportTermField')).toHaveClass(/hidden/);
+  await expect(page.locator('#reportAsOfField')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#reportPeriodLabel')).toHaveText('');
+  await expect(page.locator('#reportCumulative')).toHaveText('—');
+  await expect(page.locator('#reportPossible')).toHaveText('—');
+  await expect(page.locator('#loadReportBtn')).toBeEnabled();
+  await expect(page.locator('#exportReportBtn')).toBeDisabled();
+
+  const calls = await harness.calls();
+  const reportCalls = calls.rpc.filter(call => call.name === 'attendance_class_period_report');
+  expect(reportCalls).toHaveLength(1);
   await harness.expectNoProductionRequests();
 });
