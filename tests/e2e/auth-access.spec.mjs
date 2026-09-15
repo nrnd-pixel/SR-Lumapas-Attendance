@@ -542,3 +542,47 @@ test('external signed-out event returns to login without additional Attendance R
   expect(after.rpc).toEqual(before.rpc);
   await harness.expectNoProductionRequests();
 });
+
+test('authorized bootstrap prefers the last saved class across attendance and reporting selectors', async ({ page }) => {
+  const classes = [
+    syntheticClass(),
+    syntheticClass({ id: 'class-3b', class_code: '3B', class_name: 'Year 3B' })
+  ];
+  const register = {
+    ...registerFixture(),
+    class: syntheticClass({ id: 'class-3b', class_code: '3B', class_name: 'Year 3B' })
+  };
+  await page.addInitScript(() => localStorage.setItem('srlAttendanceLastClass', 'class-3b'));
+  const harness = await openAuthorized(page, { classes, register });
+
+  await expect(page.locator('#classSelect')).toHaveValue('class-3b');
+  await expect(page.locator('#statsClassSelect')).toHaveValue('class-3b');
+  await expect(page.locator('#reportClassSelect')).toHaveValue('class-3b');
+
+  const calls = await harness.calls();
+  const load = calls.rpc.find(call => call.name === 'attendance_load_register');
+  expect(load.args).toEqual({ p_class_id: 'class-3b', p_date: '2026-02-02' });
+  await harness.expectNoProductionRequests();
+});
+
+test('authorized account with no assigned classes warns and does not load a register', async ({ page }) => {
+  const harness = await installHarness(page, {
+    session: { user: { id: 'teacher-no-class', email: 'noclass@example.test' } },
+    rpc: {
+      attendance_teacher_status: { user_id: 'teacher-no-class', authorized: true, signup_request: null },
+      attendance_bootstrap: bootstrapFixture({ classes: [] })
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#appView')).toBeVisible();
+  await expect(page.locator('#classSelect option')).toHaveCount(0);
+  await expect(page.locator('#dateBanner')).toContainText('No attendance class has been assigned to this account.');
+
+  const calls = await harness.calls();
+  expect(calls.rpc.map(call => call.name)).toEqual([
+    'attendance_teacher_status',
+    'attendance_bootstrap'
+  ]);
+  await harness.expectNoProductionRequests();
+});

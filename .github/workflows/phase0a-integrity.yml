@@ -35,6 +35,7 @@ jobs:
           test -f assets/js/statistics.js
           test -f assets/js/admin-dashboard.js
           test -f assets/js/period-reports.js
+          test -f assets/js/app-bootstrap.js
           test -f netlify.toml
           test -f README.txt
 
@@ -829,14 +830,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B7D changed {path}")
 
-      - name: Verify exact Phase 3B7E period-reports split
+      - name: Verify historical Phase 3B7E period-reports split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b7e_base = "c59dd2965b6ab2c6aef0e6340df8ebac6e73ef78"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b7e_base}^{{commit}}"], check=True)
+          phase3b7e_sha = "e9a4338c0723becc5dcd3f30fd207ad28efdd47b"
+          for sha in (phase3b7e_base, phase3b7e_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b7e_base}:assets/js/main.js"], text=True)
 
           old_state_import = "import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';\n"
@@ -879,9 +881,9 @@ jobs:
           report_end = expected_main.index("function schoolId(){", report_start)
           expected_main = expected_main[:report_start] + expected_main[report_end:]
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7E period-reports extraction")
+          historical_main = subprocess.check_output(["git", "show", f"{phase3b7e_sha}:assets/js/main.js"], text=True)
+          if historical_main != expected_main:
+              raise SystemExit("Historical Phase 3B7E main.js is not the exact approved period-reports extraction")
 
           selection_exports = selection_block.replace("function invalidatePeriodReport", "export function invalidatePeriodReport", 1)
           report_exports = report_block
@@ -904,9 +906,9 @@ jobs:
               + selection_exports + "\n\n"
               + report_exports + "\n"
           )
-          current_reports = Path("assets/js/period-reports.js").read_text(encoding="utf-8")
-          if current_reports != expected_reports:
-              raise SystemExit("assets/js/period-reports.js is not the exact approved Phase 3B7E extraction")
+          historical_reports = subprocess.check_output(["git", "show", f"{phase3b7e_sha}:assets/js/period-reports.js"], text=True)
+          if historical_reports != expected_reports:
+              raise SystemExit("Historical Phase 3B7E period-reports.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -923,10 +925,120 @@ jobs:
               "assets/js/admin-dashboard.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b7e_base}:{path}"], text=True)
+              before = subprocess.check_output(["git", "show", f"{phase3b7e_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b7e_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B7E changed {path}")
+
+      - name: Verify exact Phase 3B7F1 app-bootstrap split
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+
+          phase3b7f1_base = "09f86472da499811af416dee8176c58ca5e5e06c"
+          subprocess.run(["git", "cat-file", "-e", f"{phase3b7f1_base}^{{commit}}"], check=True)
+          before_main = subprocess.check_output(["git", "show", f"{phase3b7f1_base}:assets/js/main.js"], text=True)
+
+          old_ui_import = "import { $, fillGroupedClasses } from './ui-helpers.js';\n"
+          new_ui_import = "import { $ } from './ui-helpers.js';\n"
+          old_auth_import = "import { initAuthSession, hideEntryViews, showLogin } from './auth-session.js';\n"
+          new_auth_import = "import { initAuthSession, showLogin } from './auth-session.js';\n"
+          old_attendance_import = "import { initAttendanceRegister, setBusy, setBanner, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';\n"
+          new_attendance_import = "import { initAttendanceRegister, loadRegister, confirmDiscard, markAllPresent, clearAll, updateSummary, save, hasUnsavedChanges } from './attendance-register.js';\n"
+          old_access_import = "import { initTeacherAccess, showSignup, ensureTeacherAccess, submitSignup, submitGateRequest, signOutTeacherGate } from './teacher-access.js';\n"
+          new_access_import = "import { initTeacherAccess, showSignup, submitSignup, submitGateRequest, signOutTeacherGate } from './teacher-access.js';\n"
+          report_import = "import { initPeriodReports, loadReportOptions, syncReportTypeUI, invalidatePeriodReport, loadPeriodReport, exportPeriodReport } from './period-reports.js';\n"
+          bootstrap_import = "import { initAppBootstrap, enterApp, schoolId, adminClasses, showAdminMsg } from './app-bootstrap.js';\n"
+          client_decl = "const sb=createAttendanceClient();\n"
+          bootstrap_init = "initAppBootstrap(sb,{switchPanel});\n"
+
+          for label, text in (
+              ('UI import', old_ui_import),
+              ('auth import', old_auth_import),
+              ('Attendance import', old_attendance_import),
+              ('teacher-access import', old_access_import),
+              ('period-reports import', report_import),
+              ('client declaration', client_decl),
+          ):
+              if before_main.count(text) != 1:
+                  raise SystemExit(f"Phase 3B7F1 base does not contain exactly one expected {label}")
+
+          enter_start = before_main.index("async function enterApp(){")
+          enter_end = before_main.index("function switchPanel(name){", enter_start)
+          enter_block = before_main[enter_start:enter_end].rstrip('\n')
+          helpers_start = before_main.index("function schoolId(){")
+          helpers_end = before_main.index("$('openSignupBtn').addEventListener('click',showSignup);", helpers_start)
+          helpers_block = before_main[helpers_start:helpers_end].rstrip('\n')
+
+          expected_main = before_main.replace(old_ui_import, new_ui_import, 1)
+          expected_main = expected_main.replace(old_auth_import, new_auth_import, 1)
+          expected_main = expected_main.replace(old_attendance_import, new_attendance_import, 1)
+          expected_main = expected_main.replace(old_access_import, new_access_import, 1)
+          expected_main = expected_main.replace(report_import, report_import + bootstrap_import, 1)
+          expected_main = expected_main.replace(client_decl, client_decl + bootstrap_init, 1)
+          enter_start = expected_main.index("async function enterApp(){")
+          enter_end = expected_main.index("function switchPanel(name){", enter_start)
+          expected_main = expected_main[:enter_start] + "\n" + expected_main[enter_end:]
+          helpers_start = expected_main.index("function schoolId(){")
+          helpers_end = expected_main.index("$('openSignupBtn').addEventListener('click',showSignup);", helpers_start)
+          expected_main = expected_main[:helpers_start] + "\n" + expected_main[helpers_end:]
+
+          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
+          if current_main != expected_main:
+              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7F1 app-bootstrap extraction")
+
+          enter_exports = enter_block.replace("async function enterApp", "export async function enterApp", 1)
+          helper_exports = helpers_block
+          for before, after in (
+              ("function schoolId", "export function schoolId"),
+              ("function adminClasses", "export function adminClasses"),
+              ("function showAdminMsg", "export function showAdminMsg"),
+          ):
+              if helper_exports.count(before) != 1:
+                  raise SystemExit(f"Phase 3B7F1 helper block does not contain exactly one {before}")
+              helper_exports = helper_exports.replace(before, after, 1)
+
+          expected_bootstrap = (
+              "import { state } from './app-state.js';\n"
+              "import { bruneiToday } from './date-helpers.js';\n"
+              "import { $, fillGroupedClasses } from './ui-helpers.js';\n"
+              "import { hideEntryViews } from './auth-session.js';\n"
+              "import { setBusy, setBanner, loadRegister } from './attendance-register.js';\n"
+              "import { ensureTeacherAccess } from './teacher-access.js';\n\n"
+              "let sb;\n"
+              "let switchPanel;\n\n"
+              "export function initAppBootstrap(client,helpers){\n"
+              "  sb=client;\n"
+              "  switchPanel=helpers.switchPanel;\n"
+              "}\n\n"
+              + enter_exports + "\n\n"
+              + helper_exports + "\n"
+          )
+          current_bootstrap = Path("assets/js/app-bootstrap.js").read_text(encoding="utf-8")
+          if current_bootstrap != expected_bootstrap:
+              raise SystemExit("assets/js/app-bootstrap.js is not the exact approved Phase 3B7F1 module")
+
+          for path in (
+              "index.html",
+              "assets/js/supabase-client.js",
+              "assets/js/app-state.js",
+              "assets/js/date-helpers.js",
+              "assets/js/ui-helpers.js",
+              "assets/js/auth-session.js",
+              "assets/js/attendance-register.js",
+              "assets/js/student-management.js",
+              "assets/js/teacher-admin.js",
+              "assets/js/teacher-access.js",
+              "assets/js/statistics.js",
+              "assets/js/admin-dashboard.js",
+              "assets/js/period-reports.js",
+              "netlify.toml",
+          ):
+              historical = subprocess.check_output(["git", "show", f"{phase3b7f1_base}:{path}"], text=True)
               current = Path(path).read_text(encoding="utf-8")
               if current != historical:
-                  raise SystemExit(f"Phase 3B7E must not change {path}")
+                  raise SystemExit(f"Phase 3B7F1 must not change {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -945,3 +1057,4 @@ jobs:
           node --check assets/js/statistics.js
           node --check assets/js/admin-dashboard.js
           node --check assets/js/period-reports.js
+          node --check assets/js/app-bootstrap.js
