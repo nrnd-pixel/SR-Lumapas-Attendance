@@ -31,6 +31,7 @@ jobs:
               v13_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
+              "supabase/verify/attendance_reporting_v13_equivalence.sql",
           ]
           for path in required:
               if not Path(path).is_file():
@@ -42,6 +43,7 @@ jobs:
           contract = Path("supabase/verify/attendance_contract.sql").read_text()
           reporting_fixtures = Path("supabase/verify/attendance_reporting_population_fixtures.sql").read_text()
           reporting_v13 = Path(v13_path).read_text()
+          reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -262,6 +264,27 @@ jobs:
           for marker in contract_markers:
               if marker not in contract:
                   raise SystemExit(f"post-migration verifier marker missing: {marker}")
+
+          # Phase 4B1 shared-engine numerical verifier must remain read-only and
+          # freeze the same four protected 3A fixtures against the new helper.
+          if re.search(r"(?im)^\s*(insert|update|delete|truncate|alter|drop|create|grant|revoke)\b", reporting_v13_equivalence):
+              raise SystemExit("Phase 4B1 shared-engine equivalence verifier must remain read-only")
+          equivalence_markers = [
+              "attendance.reporting_class_period_facts",
+              "whole_class",
+              "non_sen",
+              "425,398",
+              "408,392",
+              "1125,1051",
+              "1080,1036",
+              "0.9365::numeric",
+              "0.9608::numeric",
+              "0.9342::numeric",
+              "0.9593::numeric",
+          ]
+          for marker in equivalence_markers:
+              if marker not in reporting_v13_equivalence:
+                  raise SystemExit(f"Phase 4B1 equivalence verifier marker missing: {marker}")
 
           # Historical seed SQL must not be present; metadata markers are expected.
           if "PRIVATE DATA — OMITTED" not in history:
