@@ -1,6 +1,6 @@
--- SR Lumapas Attendance Phase 0B contract verifier
+-- SR Lumapas Attendance backend contract verifier
 -- Safe/non-mutating: reads PostgreSQL catalogs and reference tables only.
--- Run after loading the baseline into a fresh reconstruction database.
+-- Run after loading the Phase 0B baseline plus all repository Attendance migrations.
 --
 -- PASS condition: every SELECT below returns zero rows.
 
@@ -26,6 +26,7 @@ with expected(name, identity_args, result_type, security_definer) as (
     ('attendance_admin_move_class', 'p_enrolment_id uuid, p_to_class_id uuid, p_move_date date, p_remarks text', 'jsonb', false),
     ('attendance_admin_review_teacher_request', 'p_request_id uuid, p_action text, p_class_id uuid, p_assignment_type text, p_admin_note text', 'jsonb', true),
     ('attendance_admin_school_dashboard', 'p_school_id uuid, p_month date', 'jsonb', true),
+    ('attendance_admin_school_dashboard_v2', 'p_school_id uuid, p_month date, p_population text', 'jsonb', true),
     ('attendance_admin_set_teacher_active', 'p_user_id uuid, p_school_id uuid, p_active boolean', 'jsonb', true),
     ('attendance_admin_student_roster', 'p_school_id uuid', 'jsonb', false),
     ('attendance_admin_teacher_requests', 'p_status text', 'jsonb', true),
@@ -34,9 +35,11 @@ with expected(name, identity_args, result_type, security_definer) as (
     ('attendance_admin_transfer_out', 'p_enrolment_id uuid, p_last_date date, p_remarks text', 'jsonb', false),
     ('attendance_bootstrap', '', 'jsonb', false),
     ('attendance_class_period_report', 'p_class_id uuid, p_period_type text, p_term_id uuid, p_as_of_date date', 'jsonb', true),
+    ('attendance_class_period_report_v2', 'p_class_id uuid, p_period_type text, p_population text, p_term_id uuid, p_as_of_date date', 'jsonb', true),
     ('attendance_class_report_options', 'p_class_id uuid', 'jsonb', true),
     ('attendance_load_register', 'p_class_id uuid, p_date date', 'jsonb', false),
     ('attendance_monthly_class_stats', 'p_class_id uuid, p_month date', 'jsonb', true),
+    ('attendance_monthly_class_stats_v2', 'p_class_id uuid, p_month date, p_population text', 'jsonb', true),
     ('attendance_save_register', 'p_class_id uuid, p_date date, p_records jsonb, p_correction_reason text', 'jsonb', false),
     ('attendance_signup_options', '', 'jsonb', true),
     ('attendance_submit_teacher_request', 'p_full_name text, p_requested_class_id uuid, p_requested_role text', 'jsonb', true),
@@ -71,7 +74,7 @@ where e.name is null
    or e.result_type is distinct from a.result_type
    or e.security_definer is distinct from a.security_definer;
 
--- 3. Every frontend RPC is executable by authenticated
+-- 3. Every public frontend RPC is executable by authenticated
 select 'rpc_authenticated_execute' as check_name,
        p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as mismatch
 from pg_proc p
@@ -198,8 +201,67 @@ where position('Correction reason is required when changing a saved attendance r
    or position('attendance.correction_reason' in def)=0
    or position('no_changes' in def)=0;
 
--- 11. Reporting functions retain missing-register / denominator source markers.
--- Numerical equivalence is proved later with synthetic runtime fixtures in Phase 1/4.
+-- 11. Phase 4B1 internal shared reporting engine exists, is invoker-mode,
+-- and is not directly executable by client roles.
+with f as (
+  select p.oid,
+         pg_get_function_identity_arguments(p.oid) as identity_args,
+         pg_get_function_result(p.oid) as result_type,
+         p.prosecdef as security_definer,
+         p.provolatile,
+         pg_get_functiondef(p.oid) as def
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='attendance'
+    and p.proname='reporting_class_period_facts'
+)
+select 'reporting_shared_engine_contract' as check_name,
+       'missing or invalid attendance.reporting_class_period_facts' as mismatch
+where not exists (
+  select 1 from f
+  where identity_args='p_class_id uuid, p_start_date date, p_end_date date, p_population text'
+    and result_type='jsonb'
+    and security_definer=false
+    and provolatile='s'
+    and position('include_in_class_stats' in def)>0
+    and position('register_exists' in def)>0
+    and position('possible_attendance' in def)>0
+    and position('whole_class' in def)>0
+    and position('non_sen' in def)>0
+    and not has_function_privilege('authenticated',oid,'EXECUTE')
+    and not has_function_privilege('service_role',oid,'EXECUTE')
+    and not has_function_privilege('anon',oid,'EXECUTE')
+);
+
+-- 12. Population-aware public reporting RPCs delegate to the shared model while
+-- retaining their existing authorization boundaries.
+with f as (
+  select p.proname, pg_get_functiondef(p.oid) as def
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public'
+    and p.proname in (
+      'attendance_monthly_class_stats_v2',
+      'attendance_admin_school_dashboard_v2',
+      'attendance_class_period_report_v2'
+    )
+)
+select 'reporting_v2_semantics' as check_name, proname as mismatch
+from f
+where position('whole_class' in def)=0
+   or position('non_sen' in def)=0
+   or position('Reporting population must be whole_class or non_sen' in def)=0
+   or (
+     proname in ('attendance_monthly_class_stats_v2','attendance_class_period_report_v2')
+     and position('attendance.reporting_class_period_facts' in def)=0
+   )
+   or (
+     proname='attendance_admin_school_dashboard_v2'
+     and position('attendance_monthly_class_stats_v2' in def)=0
+   );
+
+-- 13. Legacy reporting RPCs remain Whole-Class wrappers so v0.7/current callers
+-- keep the old signatures and do not receive the new population field.
 with f as (
   select p.proname, pg_get_functiondef(p.oid) as def
   from pg_proc p
@@ -211,7 +273,19 @@ with f as (
       'attendance_class_period_report'
     )
 )
-select 'reporting_semantic_markers' as check_name, proname as mismatch
+select 'legacy_reporting_wrapper' as check_name, proname as mismatch
 from f
-where position('register_exists' in def)=0
-   or position('possible_attendance' in def)=0;
+where position('whole_class' in def)=0
+   or position("- 'population'" in def)=0
+   or (
+     proname='attendance_monthly_class_stats'
+     and position('attendance_monthly_class_stats_v2' in def)=0
+   )
+   or (
+     proname='attendance_admin_school_dashboard'
+     and position('attendance_admin_school_dashboard_v2' in def)=0
+   )
+   or (
+     proname='attendance_class_period_report'
+     and position('attendance_class_period_report_v2' in def)=0
+   );
