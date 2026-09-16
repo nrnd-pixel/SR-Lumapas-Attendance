@@ -28,6 +28,7 @@ jobs:
               "supabase/baseline/attendance_v1_reference_data.sql",
               "supabase/baseline/production_migration_history.md",
               "supabase/verify/attendance_contract.sql",
+              "supabase/verify/attendance_reporting_population_fixtures.sql",
           ]
           for path in required:
               if not Path(path).is_file():
@@ -36,6 +37,7 @@ jobs:
           schema = Path("supabase/baseline/attendance_v1_schema.sql").read_text()
           reference = Path("supabase/baseline/attendance_v1_reference_data.sql").read_text()
           history = Path("supabase/baseline/production_migration_history.md").read_text()
+          reporting_fixtures = Path("supabase/verify/attendance_reporting_population_fixtures.sql").read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -159,6 +161,28 @@ jobs:
           for marker in required_markers:
               if marker not in schema:
                   raise SystemExit(f"required semantic marker missing: {marker}")
+
+          # Phase 4A reporting-population verifier contract. The file is read-only
+          # and must preserve explicit whole-class vs Non-SEN semantics plus both
+          # protected 3A headline fixture pairs.
+          fixture_markers = [
+              "whole_class",
+              "non_sen",
+              "include_in_class_stats",
+              "425,398",
+              "408,392",
+              "1125,1051",
+              "1080,1036",
+              "0.9365::numeric",
+              "0.9608::numeric",
+              "0.9342::numeric",
+              "0.9593::numeric",
+          ]
+          for marker in fixture_markers:
+              if marker not in reporting_fixtures:
+                  raise SystemExit(f"reporting population fixture marker missing: {marker}")
+          if re.search(r"(?im)^\s*(insert|update|delete|truncate|alter|drop|create|grant|revoke)\b", reporting_fixtures):
+              raise SystemExit("reporting population verifier must remain read-only")
 
           # Historical seed SQL must not be present; metadata markers are expected.
           if "PRIVATE DATA — OMITTED" not in history:
