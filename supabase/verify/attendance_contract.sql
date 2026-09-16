@@ -248,16 +248,23 @@ with f as (
 )
 select 'reporting_v2_semantics' as check_name, proname as mismatch
 from f
-where position('whole_class' in def)=0
+where position('auth.uid()' in def)=0
+   or position('whole_class' in def)=0
    or position('non_sen' in def)=0
    or position('Reporting population must be whole_class or non_sen' in def)=0
    or (
      proname in ('attendance_monthly_class_stats_v2','attendance_class_period_report_v2')
-     and position('attendance.reporting_class_period_facts' in def)=0
+     and (
+       position('attendance.can_access_class' in def)=0
+       or position('attendance.reporting_class_period_facts' in def)=0
+     )
    )
    or (
      proname='attendance_admin_school_dashboard_v2'
-     and position('attendance_monthly_class_stats_v2' in def)=0
+     and (
+       position('attendance.is_school_admin' in def)=0
+       or position('attendance_monthly_class_stats_v2' in def)=0
+     )
    );
 
 -- 13. Legacy reporting RPCs remain Whole-Class wrappers so v0.7/current callers
@@ -276,7 +283,7 @@ with f as (
 select 'legacy_reporting_wrapper' as check_name, proname as mismatch
 from f
 where position('whole_class' in def)=0
-   or position("- 'population'" in def)=0
+   or position('population' in def)=0
    or (
      proname='attendance_monthly_class_stats'
      and position('attendance_monthly_class_stats_v2' in def)=0
