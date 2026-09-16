@@ -142,7 +142,6 @@ begin
       coalesce(sum(total_attendance) filter(where register_exists),0)::int as cumulative_total,
       coalesce(sum(male_attendance) filter(where register_exists),0)::int as cumulative_male,
       coalesce(sum(female_attendance) filter(where register_exists),0)::int as cumulative_female,
-      coalesce(sum(unknown_gender_attendance) filter(where register_exists),0)::int as cumulative_unknown_gender,
       count(*) filter(where register_exists)::int as registers_completed,
       count(*) filter(where not register_exists)::int as registers_missing
     from daily
@@ -204,7 +203,6 @@ begin
         'possible_attendance',m.possible_attendance,
         'cumulative_male',m.cumulative_male,
         'cumulative_female',m.cumulative_female,
-        'cumulative_unknown_gender',m.cumulative_unknown_gender,
         'cumulative_total',m.cumulative_total,
         'average_attendance',case
           when m.possible_attendance>0
@@ -337,9 +335,9 @@ to authenticated, service_role;
 create or replace function public.attendance_class_period_report_v2(
   p_class_id uuid,
   p_period_type text,
+  p_population text,
   p_term_id uuid default null,
-  p_as_of_date date default null,
-  p_population text default 'whole_class'
+  p_as_of_date date default null
 )
 returns jsonb
 language plpgsql
@@ -432,9 +430,9 @@ begin
 end;
 $function$;
 
-revoke all on function public.attendance_class_period_report_v2(uuid,text,uuid,date,text)
+revoke all on function public.attendance_class_period_report_v2(uuid,text,text,uuid,date)
 from public, anon;
-grant execute on function public.attendance_class_period_report_v2(uuid,text,uuid,date,text)
+grant execute on function public.attendance_class_period_report_v2(uuid,text,text,uuid,date)
 to authenticated, service_role;
 
 create or replace function public.attendance_admin_school_dashboard_v2(
@@ -656,9 +654,9 @@ as $function$
   select public.attendance_class_period_report_v2(
     p_class_id,
     p_period_type,
+    'whole_class',
     p_term_id,
-    p_as_of_date,
-    'whole_class'
+    p_as_of_date
   ) - 'population';
 $function$;
 
