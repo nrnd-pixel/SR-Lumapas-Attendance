@@ -4,7 +4,7 @@
 **Live site:** https://srlumapas.netlify.app/  
 **Live version:** v0.7  
 **Cleanup baseline:** v1.0  
-**Last updated:** 16 September 2026
+**Last updated:** 17 September 2026
 
 ## Purpose
 
@@ -207,16 +207,27 @@ Actions:
 **Exit:** equivalent browser behaviour with clear module ownership.
 
 ### Phase 4 — Reporting consolidation
-**Status:** Not started.
-**Goal:** Prevent formula drift across reports.
+**Status:** Phase 4A safety-net checkpoint is in draft PR #49; Phase 4B implementation has not started.
+**Goal:** Prevent formula drift across reports while supporting department-dependent reporting populations.
+
+Reporting populations:
+- **Whole class (including SEN)** — all active, date-eligible enrolments. This is the current/default production reporting behaviour and preserves the established official fixtures.
+- **Non-SEN pupils only** — active, date-eligible enrolments where `include_in_class_stats = true`. The flag is treated as the explicit inclusion boundary for this reporting population; reporting must not infer SEN status from free-text group labels.
+- The selected population must apply consistently to numerator, denominator, roster count, gender totals, daily/monthly aggregates, Dashboard totals, Term/YTD reports, and CSV exports.
+- Missing-register semantics remain identical in both populations: a missing register is never zero attendance and contributes neither attendance nor possible pupil-days.
+
+Phase 4 checkpoint split:
+- **4A — Reporting equivalence safety net:** freeze production-derived Whole-Class and Non-SEN aggregate fixtures before changing reporting SQL. Add a read-only aggregate verifier with no pupil/teacher identifiers; align synthetic browser fixtures with current live term metadata/gender totals; keep runtime RPCs, DOM, grants/RLS/Auth/Science/Netlify/production data unchanged. **Implemented in draft PR #49; pending exact-final-head verification and explicit merge approval.**
+- **4B — Shared reporting calculation model + population selector:** after 4A is merged and re-verified, introduce one shared day-level reporting calculation model and an explicit reporting-population choice for Monthly Statistics, Admin Dashboard, Term/YTD Reports, and CSV export. Keep Whole Class as the initial default so existing behaviour does not change silently. Preserve public authorization boundaries and avoid Phase 5 security redesign in this checkpoint. **Not started.**
 
 Actions:
 - centralise school-day, eligible-pupil-day, register-completion, and attendance-counting logic;
 - make Monthly, Dashboard, Term, and YTD reporting reuse shared calculation logic;
 - preserve missing-register safeguards;
-- preserve transfer-aware denominators.
+- preserve transfer-aware denominators;
+- prove both reporting populations against frozen fixtures before and after SQL consolidation.
 
-**Exit:** one calculation model drives all reporting surfaces.
+**Exit:** one calculation model drives all reporting surfaces, and the requested reporting population is explicit and mathematically consistent across all outputs.
 
 ### Phase 5 — Security and access cleanup
 **Goal:** Make the trust boundary explicit and minimal.
@@ -299,6 +310,7 @@ Recommended order:
 - Phase 3B7F1 is application-startup sensitive: `enterApp()` remains downstream of `ensureTeacherAccess()` and must continue to use the same single Supabase client, exact `attendance_bootstrap` contract, class-selector initialization, saved-class fallback, zero-class guard, and initial `loadRegister()` ordering. The structural extraction must not absorb the deferred Check Approval stale-response fix or alter Auth/recovery startup.
 - Phase 3B7F2 is application-navigation sensitive: all six panels must preserve exactly-one-visible and exactly-one-active-tab behavior; Dashboard/Statistics/Reports/Students/Teachers must retain their current lazy-load calls; Statistics and Reports must retain attendance-class fallback; Dashboard → Statistics must preserve class/month routing; returning to Attendance must not generate a new RPC. Keep listener and unload ownership in `main.js` for this checkpoint.
 - Phase 3B7F3 closes modularisation without another runtime move: `main.js` intentionally remains the composition root for module initialization, static event registration, generic dialog-close wiring, the unsaved-attendance `beforeunload` guard, and Auth startup. Later work should not extract those responsibilities merely to shrink the file; require a concrete ownership/test benefit.
+- Phase 4 reporting population is now an explicit business rule: some departments require Whole-Class statistics including SEN pupils, while others require Non-SEN-only statistics. Until Phase 4B implements the selector, cleanup must preserve current Whole-Class output as the default and must not silently reinterpret `include_in_class_stats` in existing public reporting RPCs.
 
 ### Medium-term
 - Frontend module ownership is now split; remaining frontend reproducibility/CSP debt is concentrated in the runtime CDN and inline styling rather than a single-file JavaScript bottleneck.
@@ -316,9 +328,10 @@ Recommended order:
 
 ## Reference QA fixtures
 
-### 3A February 2026
+### 3A February 2026 — Whole class (including SEN; current/default)
 - Pupils: 25
 - School days: 17
+- Registers: 17/17
 - Male cumulative: 214
 - Female cumulative: 184
 - Total cumulative: 398
@@ -326,11 +339,38 @@ Recommended order:
 - Average attendance ratio: 0.9365
 - Attendance percentage: 93.65%
 
-### 3A Term 1 2026
+### 3A February 2026 — Non-SEN pupils only
+- Pupils: 24
+- School days: 17
+- Registers: 17/17
+- Male cumulative: 208
+- Female cumulative: 184
+- Total cumulative: 392
+- Possible attendance: 408
+- Average attendance ratio: 0.9608
+- Attendance percentage: 96.08%
+
+### 3A Term 1 2026 — Whole class (including SEN; current/default)
+- Period: 2026-01-03 to 2026-03-12
+- Pupils: 25
 - Registers: 45/45
+- Male cumulative: 567
+- Female cumulative: 484
 - Cumulative attendance: 1,051
+- Possible attendance: 1,125
 - Average attendance ratio: 0.9342
 - Attendance percentage: 93.42%
+
+### 3A Term 1 2026 — Non-SEN pupils only
+- Period: 2026-01-03 to 2026-03-12
+- Pupils: 24
+- Registers: 45/45
+- Male cumulative: 552
+- Female cumulative: 484
+- Cumulative attendance: 1,036
+- Possible attendance: 1,080
+- Average attendance ratio: 0.9593
+- Attendance percentage: 95.93%
 
 Core rule:
 
@@ -338,28 +378,30 @@ Core rule:
 
 `attendance % = average attendance ratio × 100`
 
-For transfers, use eligible pupil-days. Missing registers must never be treated as zero attendance.
+For transfers, use eligible pupil-days. Missing registers must never be treated as zero attendance. Population filtering must be applied to both attendance numerator and possible-attendance denominator.
 
 ## Current status
 
-**Current checkpoint:** Phase 3 — COMPLETE AND MERGED through Phase 3B7F3. Phase 4 has not started.
+**Current checkpoint:** Phase 4A — reporting equivalence safety net implemented in draft PR #49; Phase 4B has not started.
 
 - Canonical repository: `nrnd-pixel/SR-Lumapas-Attendance` (public).
-- Exact current signed cleanup `main`: `07505b7de962ecc46bc06ce4c51cfa47d94dcdd0`, the Phase 3B7F3 merge from PR #47. Its parents are prior signed/docs-closure `main` `db00744b43602a057fd9a034fa863f602e632c07` and approved PR head `a76229c3f720b6e6351a1b73f1cdef83da703fbf`; tree `7497d486a82a58db82e604668065f62ebe6f3db9`; GitHub signature verification is valid.
-- PR #47 exact head `a76229c3f720b6e6351a1b73f1cdef83da703fbf` was exactly one commit ahead of signed base `db00744b43602a057fd9a034fa863f602e632c07` with exactly one changed file, `tests/e2e/composition-root.spec.mjs`, +44/−0. Exact-head CI passed: Phase 0A Integrity `35053697452`, Phase 0B Backend Contract `35053697405`, and Phase 1 Playwright `35053697404`; Playwright ran 53 Chromium tests with all 53 passing in 18.8s on Node `v22.23.2`, npm `10.9.8`, with 0 vulnerabilities.
-- The Phase 3B7F3 impact map found `assets/js/main.js` reduced to a small composition root rather than a remaining business-logic bottleneck. Module initialization, static DOM listener registration, generic `[data-close]` wiring, the unsaved-attendance `beforeunload` guard, and Auth startup intentionally remain there.
-- The two new browser regressions directly prove the `beforeunload` lifecycle contract and generic student-movement dialog-close wiring. Existing class/date unsaved-navigation, recovery, Attendance/correction, administration, navigation, official 3A February/Term 1, missing-register, CSV, stale-response and reporting safeguards remain mandatory.
-- No runtime JavaScript, `index.html`, SQL/RPC signature, grant, RLS, hosted Auth, Science, `netlify.toml`, production-data, reporting-formula, deployment, dependency/CSP hardening, or protected live-v0.7 change was included in Phase 3B7F3.
-- The recorded student-roster, teacher-admin-list, and concurrent Check Approval stale-response gaps remain deliberately deferred. Phase 4 reporting consolidation and Phase 5 security work remain unstarted.
+- Exact current signed cleanup `main`: `2df3459e1aabe3889803974de381134604b1cb87`, the documentation-only Phase 3 closure merge from PR #48. Its tree is `92eccd9a9aac52c870ef7fcad5b5a665e8b2dd9f`; GitHub signature verification is valid.
+- Phase 4 impact mapping found frontend reporting ownership already separated across `statistics.js`, `admin-dashboard.js`, and `period-reports.js`; the principal calculation duplication is between `attendance_monthly_class_stats` and `attendance_class_period_report`, while the Dashboard already composes Monthly statistics.
+- Live read-only verification confirmed current reporting uses all active date-eligible enrolments and does not currently filter `include_in_class_stats`; `attendance_save_register` does separately use that flag for `main_class_records`. This is now treated as a department-dependent reporting choice rather than silently changing existing reporting semantics.
+- Phase 4A draft PR #49 branch `cleanup/phase-4a-reporting-population-fixtures` adds an aggregate-only read-only SQL verifier, aligns synthetic reporting fixture metadata with live 2026 Term 1 dates/gender totals, and requires the verifier in the Phase 0B source/safety gate. No runtime reporting RPC, DOM, grant, RLS, Auth, Science, Netlify, production-data, or deployment mutation is included.
+- The production-derived fixtures frozen for Phase 4A are: Whole-Class February `398/425 = 0.9365 = 93.65%`, Non-SEN February `392/408 = 0.9608 = 96.08%`, Whole-Class Term 1 `1051/1125 = 0.9342 = 93.42%`, and Non-SEN Term 1 `1036/1080 = 0.9593 = 95.93%`. All four use complete registers for their periods.
+- The Phase 4A verifier was executed read-only against live data and returned zero fixture mismatches before PR #49 was opened. Exact-head CI must be re-run after this roadmap update before readiness can be assessed.
+- The recorded student-roster, teacher-admin-list, and concurrent Check Approval stale-response gaps remain deliberately deferred. Phase 5 security work remains unstarted.
 
-**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` as a production release.
+**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` or PR #49 as a production release.
 
-**Next action:** perform a fresh Phase 4 reporting-consolidation impact map from exact signed `main` `07505b7de962ecc46bc06ce4c51cfa47d94dcdd0`. Before any reporting refactor, map the current Monthly/Dashboard/Term/YTD RPC calculation ownership, shared and duplicated SQL logic, grants/RLS/SECURITY DEFINER boundaries, returned fields, frontend consumers, reporting fixtures, and exact equivalence risks. Do not implement Phase 4, begin Phase 5, fix deferred stale-response gaps, deploy, or promote automatically.
+**Next action:** run exact-final-head Phase 0A, Phase 0B, and full Playwright verification for PR #49; review the complete four-file diff and any comments/threads; if clean, stop for explicit user merge approval. Do not begin Phase 4B, apply a reporting migration, change live Supabase, begin Phase 5, deploy, or promote automatically.
 
 **Recommended thinking effort:** High.
 
 ## Change log
 
+- **17 Sep 2026:** Phase 4 impact mapping established the department-dependent reporting-population requirement: Whole Class (including SEN) must coexist with Non-SEN-only statistics rather than forcing one interpretation globally. Draft PR #49 (`cleanup/phase-4a-reporting-population-fixtures`) implements Phase 4A safety-net work only: aggregate production-derived fixtures, a read-only verifier, browser fixture fidelity corrections, and backend-contract CI inclusion. Live verification produced Whole-Class February `398/425 = 93.65%`, Non-SEN February `392/408 = 96.08%`, Whole-Class Term 1 `1051/1125 = 93.42%`, and Non-SEN Term 1 `1036/1080 = 95.93%`, with zero verifier mismatches. No runtime reporting code, public RPC signature, grant/RLS/Auth/Science/Netlify/production-data/deployment mutation was made. Phase 4B remains not started and PR #49 remains unmerged pending final exact-head gates and explicit approval.
 - **16 Sep 2026:** Phase 3 completed through Phase 3B7F3. Fresh remaining-ownership mapping found `assets/js/main.js` had become a small composition root, so no further listener extraction was justified. Branch `cleanup/phase-3b7f3-composition-closure` / PR #47 added only `tests/e2e/composition-root.spec.mjs`, with two browser regressions for the unsaved-attendance `beforeunload` guard and generic `[data-close]` student-movement dialog wiring. Exact head `a76229c3f720b6e6351a1b73f1cdef83da703fbf` passed Phase 0A `35053697452`, Phase 0B `35053697405`, and Playwright `35053697404` with 53/53 Chromium tests in 18.8s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. PR #47 then merged with the expected-head SHA guard as signed `main` commit `07505b7de962ecc46bc06ce4c51cfa47d94dcdd0`, with parents `db00744b43602a057fd9a034fa863f602e632c07` and `a76229c3f720b6e6351a1b73f1cdef83da703fbf`, and tree `7497d486a82a58db82e604668065f62ebe6f3db9`; GitHub signature verification is valid. No runtime/backend/Auth/Science/Netlify/production-data/reporting/deployment change was made. Phase 4 has not started.
 - **16 Sep 2026:** Phase 3B7F2 completed. PR #45 approved normalized head `cb131514a7b90b81d52882455281a25de6b3609f` was exactly one commit ahead / zero behind signed/docs-closure base `cf939c3582d4db2c2be7a503b4355cfd9066af55` with exactly five changed files. Exact-head gates were fully green: Phase 0A Integrity `34987342629`, Phase 0B Backend Contract `34987342602`, and Phase 1 Playwright `34987342606` with 51/51 Chromium tests in 21.2s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. The application-navigation regression passed alongside all protected recovery, Attendance/correction, student/teacher administration, official 3A February and Term 1/CSV, missing-register, gender-incomplete statistics, Dashboard → Statistics, YTD, stale-response, bootstrap, and UI-helper safeguards. PR #45 then merged as signed runtime commit `03207a339cf5b4c0836bcdc5fccd95f451adbfd4`, with parents `cf939c3582d4db2c2be7a503b4355cfd9066af55` and `cb131514a7b90b81d52882455281a25de6b3609f`, and tree `63297bbfca93db74bc4f4236e513aff322a2e7cc`; GitHub signature verification is valid. No SQL/RPC/grant/RLS/Auth/Science/Netlify/production-data/deployment mutation was made. Phase 3B7F3+ has not started.
 - **15 Sep 2026:** Phase 3B7F2 application-navigation checkpoint was implemented on branch `cleanup/phase-3b7f2-app-navigation` / draft PR #45 from exact signed/docs-closure `main` `cf939c3582d4db2c2be7a503b4355cfd9066af55`. Only `switchPanel(name)` and `openStatisticsForClass(classId, month)` move to new `assets/js/app-navigation.js`; all top-level event listeners, generic `[data-close]` wiring, `beforeunload`, backend contracts, Auth/recovery, Science, Netlify, production data, and deployment remain unchanged. A new browser navigation regression covers six-panel visibility/active-tab behavior, target lazy loaders, Statistics/Reports class fallback, Dashboard → Statistics routing, Students/Teachers loading, and no extra RPC on Attendance return. The evolved Phase 0A gate preserves historical exact-extraction evidence through Phase 3B7F1 and caught/rejected two source-format mismatches during construction without any assertion weakening. Corrected pre-normalization head `f47b1304bb3f89c065171262e76cd14b48e30f49` passed Phase 0A `34985669382`, Phase 0B `34985669379`, and Playwright `34985669413` with 51/51 Chromium tests in 16.5s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities. Final one-commit normalization, exact normalized-head CI, diff/review verification, and explicit merge approval remained mandatory at that pre-merge checkpoint.

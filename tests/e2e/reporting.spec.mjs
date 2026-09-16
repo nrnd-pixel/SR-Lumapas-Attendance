@@ -29,8 +29,8 @@ function februaryStatsFixture() {
     },
     roster: {
       pupils_seen_in_month: 25,
-      male_pupils: 13,
-      female_pupils: 12,
+      male_pupils: 14,
+      female_pupils: 11,
       gender_complete: true,
       gender_unknown_pupils: 0
     },
@@ -171,8 +171,8 @@ function reportOptionsFixture() {
   return {
     class: { id: 'class-3a', class_code: '3A', class_name: 'Year 3A', year_no: 2026 },
     terms: [
-      { id: 'term-1', term_name: 'Term 1', start_date: '2026-01-02', end_date: '2026-04-30' },
-      { id: 'term-2', term_name: 'Term 2', start_date: '2026-05-01', end_date: '2026-08-31' }
+      { id: 'term-1', term_name: 'Term 1', start_date: '2026-01-03', end_date: '2026-03-12' },
+      { id: 'term-2', term_name: 'Term 2', start_date: '2026-03-30', end_date: '2026-05-28' }
     ]
   };
 }
@@ -183,17 +183,17 @@ function termReportFixture() {
     period: {
       type: 'term',
       label: 'Term 1',
-      start_date: '2026-01-02',
-      end_date: '2026-04-30',
-      as_of_date: '2026-04-30'
+      start_date: '2026-01-03',
+      end_date: '2026-03-12',
+      as_of_date: '2026-03-12'
     },
     summary: {
       cumulative_total: 1051,
       possible_attendance: 1125,
       average_attendance: termRatio,
       attendance_percentage: termRatio * 100,
-      cumulative_male: 530,
-      cumulative_female: 521,
+      cumulative_male: 567,
+      cumulative_female: 484,
       registers_completed: 45,
       registers_missing: 0,
       school_days: 45,
@@ -202,8 +202,8 @@ function termReportFixture() {
     },
     roster: {
       pupils_seen: 25,
-      male_pupils: 13,
-      female_pupils: 12,
+      male_pupils: 14,
+      female_pupils: 11,
       gender_complete: true,
       gender_unknown_pupils: 0
     },
@@ -304,6 +304,7 @@ test('3A February statistics preserve the official 17-day reporting invariant', 
   await expect(page.locator('#statsSchoolDays')).toHaveText('17/17');
   await expect(page.locator('#statsMale')).toHaveText('214');
   await expect(page.locator('#statsFemale')).toHaveText('184');
+  await expect(page.locator('#statsRoster')).toHaveText('25 pupils · 14 male · 11 female');
   await expect(page.locator('#statsBanner')).toContainText('Complete monthly statistics');
 
   const calls = await harness.calls();
@@ -411,6 +412,9 @@ test('3A Term 1 report preserves the official 45/45 invariant and CSV export val
   await expect(page.locator('#reportPercent')).toHaveText('93.42%');
   await expect(page.locator('#reportRegisters')).toHaveText('45/45');
   await expect(page.locator('#reportSchoolDays')).toHaveText('45/45');
+  await expect(page.locator('#reportMale')).toHaveText('567');
+  await expect(page.locator('#reportFemale')).toHaveText('484');
+  await expect(page.locator('#reportRoster')).toHaveText('25 pupils seen · 14 male · 11 female');
   await expect(page.locator('#reportBanner')).toContainText('Complete Term 1 report');
 
   const callsBeforeExport = await harness.calls();
@@ -430,9 +434,13 @@ test('3A Term 1 report preserves the official 45/45 invariant and CSV export val
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const csv = await readFile(downloadPath, 'utf8');
+  expect(csv).toContain('Start Date,2026-01-03');
+  expect(csv).toContain('End Date,2026-03-12');
   expect(csv).toContain('Cumulative Attendance,1051');
   expect(csv).toContain('Possible Attendance,1125');
   expect(csv).toContain('Average Attendance Ratio,' + termRatio);
+  expect(csv).toContain('Male Cumulative,567');
+  expect(csv).toContain('Female Cumulative,484');
   expect(csv).toContain('Completed Registers,45');
   expect(csv).toContain('Missing Registers,0');
   await harness.expectNoProductionRequests();
