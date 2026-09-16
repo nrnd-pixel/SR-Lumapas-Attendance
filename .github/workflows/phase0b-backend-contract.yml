@@ -22,11 +22,13 @@ jobs:
           import re
           import sys
 
+          v13_path = "supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",
               "supabase/baseline/attendance_v1_reference_data.sql",
               "supabase/baseline/production_migration_history.md",
+              v13_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
           ]
@@ -37,7 +39,9 @@ jobs:
           schema = Path("supabase/baseline/attendance_v1_schema.sql").read_text()
           reference = Path("supabase/baseline/attendance_v1_reference_data.sql").read_text()
           history = Path("supabase/baseline/production_migration_history.md").read_text()
+          contract = Path("supabase/verify/attendance_contract.sql").read_text()
           reporting_fixtures = Path("supabase/verify/attendance_reporting_population_fixtures.sql").read_text()
+          reporting_v13 = Path(v13_path).read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -53,7 +57,7 @@ jobs:
               if re.search(pattern, combined, re.I):
                   raise SystemExit(f"forbidden {label} found in Phase 0B public source")
 
-          # Exact structural inventory from the captured snapshot.
+          # Exact structural inventory from the captured Phase 0B baseline snapshot.
           expected_tables = {
               "attendance.absence_reasons",
               "attendance.academic_years",
@@ -99,6 +103,8 @@ jobs:
                       f"{label} mismatch: expected={expected_count} actual={actual_count}"
                   )
 
+          # Baseline snapshot public RPC inventory remains frozen; later repository
+          # migrations are verified independently below.
           expected_rpcs = {
               "attendance_signup_options",
               "attendance_submit_teacher_request",
@@ -150,7 +156,7 @@ jobs:
               if f"insert into {table}" in lowref:
                   raise SystemExit(f"production-data insert forbidden: {table}")
 
-          # Reporting and correction semantic source guards.
+          # Reporting and correction semantic source guards in the captured baseline.
           required_markers = [
               "Correction reason is required when changing a saved attendance register",
               "correction_count = correction_count + 1",
@@ -163,7 +169,7 @@ jobs:
                   raise SystemExit(f"required semantic marker missing: {marker}")
 
           # Phase 4A reporting-population verifier contract. The file is read-only
-          # and must preserve explicit whole-class vs Non-SEN semantics plus both
+          # and must preserve explicit Whole-Class vs Non-SEN semantics plus both
           # protected 3A headline fixture pairs.
           fixture_markers = [
               "whole_class",
@@ -183,6 +189,79 @@ jobs:
                   raise SystemExit(f"reporting population fixture marker missing: {marker}")
           if re.search(r"(?im)^\s*(insert|update|delete|truncate|alter|drop|create|grant|revoke)\b", reporting_fixtures):
               raise SystemExit("reporting population verifier must remain read-only")
+
+          # Phase 4B1 migration: source-only reporting-function changes. It must not
+          # mutate tables/data, touch Science, parse free-text reporting groups, or
+          # overload the three existing Data API reporting function names.
+          if re.search(r"(?im)^\s*(insert|update|delete|truncate|alter\s+table|drop\s+table)\b", reporting_v13):
+              raise SystemExit("Phase 4B1 migration must not mutate Attendance table data/structure")
+          if re.search(r"(?i)\bscience\.", reporting_v13):
+              raise SystemExit("Phase 4B1 migration must not touch Science objects")
+          if "reporting_group" in reporting_v13.lower():
+              raise SystemExit("Phase 4B1 must use include_in_class_stats, not free-text reporting_group parsing")
+
+          expected_v13_defs = {
+              "attendance.reporting_class_period_facts": 1,
+              "public.attendance_monthly_class_stats_v2": 1,
+              "public.attendance_admin_school_dashboard_v2": 1,
+              "public.attendance_class_period_report_v2": 1,
+              "public.attendance_monthly_class_stats": 1,
+              "public.attendance_admin_school_dashboard": 1,
+              "public.attendance_class_period_report": 1,
+          }
+          for fn, expected_count in expected_v13_defs.items():
+              actual_count = len(re.findall(
+                  rf"(?im)^create or replace function\s+{re.escape(fn)}\s*\(",
+                  reporting_v13
+              ))
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"Phase 4B1 function definition mismatch for {fn}: "
+                      f"expected={expected_count} actual={actual_count}"
+                  )
+
+          migration_markers = [
+              "security invoker",
+              "include_in_class_stats",
+              "whole_class",
+              "non_sen",
+              "Reporting population must be whole_class or non_sen",
+              "attendance.reporting_class_period_facts",
+              "attendance_monthly_class_stats_v2",
+              "attendance_admin_school_dashboard_v2",
+              "attendance_class_period_report_v2",
+              "revoke all on function attendance.reporting_class_period_facts(uuid,date,date,text)",
+              "grant execute on function public.attendance_monthly_class_stats_v2(uuid,date,text)",
+              "grant execute on function public.attendance_admin_school_dashboard_v2(uuid,date,text)",
+              "grant execute on function public.attendance_class_period_report_v2(uuid,text,text,uuid,date)",
+          ]
+          low_v13 = reporting_v13.lower()
+          for marker in migration_markers:
+              if marker.lower() not in low_v13:
+                  raise SystemExit(f"Phase 4B1 migration marker missing: {marker}")
+          if reporting_v13.count("- 'population'") != 3:
+              raise SystemExit("all three legacy reporting RPCs must remove the v2 population field")
+
+          forbidden_overloads = [
+              r"create or replace function\s+public\.attendance_monthly_class_stats\s*\(\s*p_class_id\s+uuid\s*,\s*p_month\s+date\s*,\s*p_population",
+              r"create or replace function\s+public\.attendance_admin_school_dashboard\s*\(\s*p_school_id\s+uuid\s*,\s*p_month\s+date\s*,\s*p_population",
+              r"create or replace function\s+public\.attendance_class_period_report\s*\([^)]*p_population",
+          ]
+          for pattern in forbidden_overloads:
+              if re.search(pattern, reporting_v13, re.I | re.S):
+                  raise SystemExit("Phase 4B1 must use uniquely named *_v2 RPCs, not Data API overloads")
+
+          contract_markers = [
+              "attendance_admin_school_dashboard_v2",
+              "attendance_class_period_report_v2",
+              "attendance_monthly_class_stats_v2",
+              "reporting_class_period_facts",
+              "reporting_shared_engine_contract",
+              "legacy_reporting_wrapper",
+          ]
+          for marker in contract_markers:
+              if marker not in contract:
+                  raise SystemExit(f"post-migration verifier marker missing: {marker}")
 
           # Historical seed SQL must not be present; metadata markers are expected.
           if "PRIVATE DATA — OMITTED" not in history:
