@@ -35,7 +35,7 @@ jobs:
           supabase init --workdir .phase4b1v --force
           mkdir -p .phase4b1v/supabase/migrations
           # Executing the reconstructed baseline first is intentional: this gate
-          # must catch reconstruction-order defects before v13 is considered valid.
+          # must catch ordering and executable-SQL syntax defects before v13 is valid.
           cp supabase/baseline/attendance_v1_schema.sql \
             .phase4b1v/supabase/migrations/20260913000000_attendance_v1_schema.sql
           cp supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql \
