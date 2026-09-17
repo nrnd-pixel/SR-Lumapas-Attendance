@@ -4,7 +4,11 @@
 
 begin;
 set local role authenticated;
-select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000099',true);
+do $$
+begin
+  perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000099',true);
+end
+$$;
 
 with actual as (
   select public.attendance_monthly_class_stats(
