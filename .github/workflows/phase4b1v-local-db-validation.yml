@@ -1,0 +1,84 @@
+name: Phase 4B1V Local DB Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase4b1v-local-db-validation.yml'
+      - 'supabase/baseline/**'
+      - 'supabase/migrations/**'
+      - 'supabase/fixtures/**'
+      - 'supabase/verify/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-db-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Prepare isolated local project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .phase4b1v
+          mkdir -p .phase4b1v
+          supabase init --workdir .phase4b1v --force
+          mkdir -p .phase4b1v/supabase/migrations
+          cp supabase/baseline/attendance_v1_schema.sql \
+            .phase4b1v/supabase/migrations/20260913000000_attendance_v1_schema.sql
+          cp supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql \
+            .phase4b1v/supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql
+          cat supabase/baseline/attendance_v1_reference_data.sql \
+              supabase/fixtures/phase4b1v_reporting_fixture.sql \
+            > .phase4b1v/supabase/seed.sql
+
+      - name: Start fresh local Supabase database and apply migrations
+        run: supabase db start --workdir .phase4b1v
+
+      - name: Verify migration history and reporting contracts
+        shell: bash
+        env:
+          DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || {
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          }
+
+          versions="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -c \
+            "select version from supabase_migrations.schema_migrations order by version;")"
+          printf '%s\n' "$versions"
+          grep -qx '20260913000000' <<<"$versions"
+          grep -qx '20260917070000' <<<"$versions"
+
+          run_zero_rows() {
+            local file="$1"
+            local out
+            out="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -f "$file")"
+            if [[ -n "$out" ]]; then
+              echo "Verifier returned mismatch rows: $file"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "PASS: $file"
+          }
+
+          run_zero_rows supabase/verify/attendance_contract.sql
+          run_zero_rows supabase/verify/attendance_reporting_population_fixtures.sql
+          run_zero_rows supabase/verify/attendance_reporting_v13_equivalence.sql
+          run_zero_rows supabase/verify/attendance_reporting_v13_public_api.sql
+
+      - name: Stop isolated local Supabase stack
+        if: always()
+        run: supabase stop --workdir .phase4b1v --no-backup
