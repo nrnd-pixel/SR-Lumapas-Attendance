@@ -14,6 +14,8 @@ export function switchPanel(name){
   if(name==='reports'){if(!$('reportClassSelect').value)$('reportClassSelect').value=$('classSelect').value;loadReportOptions();}
   if(name==='students')loadAdminStudents();if(name==='teachers')loadAdminTeachers();
 }
-export function openStatisticsForClass(classId,month){
-  $('statsClassSelect').value=classId;$('statsMonth').value=month;switchPanel('statistics');
+export function openStatisticsForClass(classId,month,population='whole_class'){
+  $('statsClassSelect').value=classId;$('statsMonth').value=month;
+  if($('statsPopulation'))$('statsPopulation').value=population;
+  switchPanel('statistics');
 }
