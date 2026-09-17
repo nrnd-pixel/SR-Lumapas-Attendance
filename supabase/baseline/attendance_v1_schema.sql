@@ -263,42 +263,26 @@ create table attendance_private.teacher_access_audit (
 alter table attendance.absence_reasons add constraint absence_reasons_pkey PRIMARY KEY (code);
 alter table attendance.academic_years add constraint academic_years_check CHECK (end_date >= start_date);
 alter table attendance.academic_years add constraint academic_years_pkey PRIMARY KEY (id);
-alter table attendance.academic_years add constraint academic_years_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
 alter table attendance.academic_years add constraint academic_years_school_id_year_no_key UNIQUE (school_id, year_no);
 alter table attendance.academic_years add constraint academic_years_year_no_check CHECK (year_no >= 2000 AND year_no <= 2100);
 alter table attendance.attendance_codes add constraint attendance_codes_category_check CHECK (category = ANY (ARRAY['present'::text, 'absent'::text, 'late'::text, 'excused'::text, 'other'::text]));
 alter table attendance.attendance_codes add constraint attendance_codes_check CHECK (NOT (counts_as_present AND counts_as_absent));
 alter table attendance.attendance_codes add constraint attendance_codes_pkey PRIMARY KEY (code);
-alter table attendance.attendance_records add constraint attendance_records_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 alter table attendance.attendance_records add constraint attendance_records_daily_register_id_enrolment_id_key UNIQUE (daily_register_id, enrolment_id);
-alter table attendance.attendance_records add constraint attendance_records_daily_register_id_fkey FOREIGN KEY (daily_register_id) REFERENCES attendance.daily_registers(id) ON DELETE CASCADE;
-alter table attendance.attendance_records add constraint attendance_records_enrolment_id_fkey FOREIGN KEY (enrolment_id) REFERENCES attendance.enrolments(id) ON DELETE CASCADE;
 alter table attendance.attendance_records add constraint attendance_records_pkey PRIMARY KEY (id);
-alter table attendance.attendance_records add constraint attendance_records_reason_code_fkey FOREIGN KEY (reason_code) REFERENCES attendance.absence_reasons(code);
 alter table attendance.attendance_records add constraint attendance_records_source_check CHECK (source = ANY (ARRAY['web'::text, 'import'::text, 'admin'::text]));
-alter table attendance.attendance_records add constraint attendance_records_status_code_fkey FOREIGN KEY (status_code) REFERENCES attendance.attendance_codes(code);
-alter table attendance.attendance_records add constraint attendance_records_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 alter table attendance.calendar_dates add constraint calendar_dates_academic_year_id_calendar_date_key UNIQUE (academic_year_id, calendar_date);
-alter table attendance.calendar_dates add constraint calendar_dates_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES attendance.academic_years(id) ON DELETE CASCADE;
 alter table attendance.calendar_dates add constraint calendar_dates_pkey PRIMARY KEY (id);
-alter table attendance.calendar_dates add constraint calendar_dates_term_id_fkey FOREIGN KEY (term_id) REFERENCES attendance.terms(id) ON DELETE SET NULL;
 alter table attendance.classes add constraint classes_academic_year_id_class_code_key UNIQUE (academic_year_id, class_code);
-alter table attendance.classes add constraint classes_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES attendance.academic_years(id) ON DELETE CASCADE;
 alter table attendance.classes add constraint classes_pkey PRIMARY KEY (id);
 alter table attendance.daily_registers add constraint daily_registers_class_id_attendance_date_key UNIQUE (class_id, attendance_date);
-alter table attendance.daily_registers add constraint daily_registers_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE CASCADE;
 alter table attendance.daily_registers add constraint daily_registers_correction_count_check CHECK (correction_count >= 0);
 alter table attendance.daily_registers add constraint daily_registers_last_correction_reason_check CHECK (last_correction_reason IS NULL OR char_length(last_correction_reason) <= 500);
 alter table attendance.daily_registers add constraint daily_registers_pkey PRIMARY KEY (id);
-alter table attendance.daily_registers add constraint daily_registers_started_by_fkey FOREIGN KEY (started_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 alter table attendance.daily_registers add constraint daily_registers_status_check CHECK (status = ANY (ARRAY['draft'::text, 'submitted'::text]));
-alter table attendance.daily_registers add constraint daily_registers_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-alter table attendance.daily_registers add constraint daily_registers_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 alter table attendance.enrolments add constraint enrolments_check CHECK (end_date IS NULL OR end_date >= start_date);
-alter table attendance.enrolments add constraint enrolments_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE CASCADE;
 alter table attendance.enrolments add constraint enrolments_pkey PRIMARY KEY (id);
 alter table attendance.enrolments add constraint enrolments_student_id_class_id_start_date_key UNIQUE (student_id, class_id, start_date);
-alter table attendance.enrolments add constraint enrolments_student_id_fkey FOREIGN KEY (student_id) REFERENCES attendance.students(id) ON DELETE CASCADE;
 alter table attendance.schools add constraint schools_pkey PRIMARY KEY (id);
 alter table attendance.schools add constraint schools_school_code_key UNIQUE (school_code);
 alter table attendance.settings add constraint settings_check CHECK (good_threshold >= monitor_threshold);
@@ -308,49 +292,65 @@ alter table attendance.settings add constraint settings_late_count_for_one_absen
 alter table attendance.settings add constraint settings_min_term_recorded_days_check CHECK (min_term_recorded_days >= 0);
 alter table attendance.settings add constraint settings_monitor_threshold_check CHECK (monitor_threshold >= 0::numeric AND monitor_threshold <= 1::numeric);
 alter table attendance.settings add constraint settings_pkey PRIMARY KEY (school_id);
-alter table attendance.settings add constraint settings_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
-alter table attendance.student_movements add constraint student_movements_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id);
 alter table attendance.student_movements add constraint student_movements_details_check CHECK (jsonb_typeof(details) = 'object'::text);
-alter table attendance.student_movements add constraint student_movements_from_class_id_fkey FOREIGN KEY (from_class_id) REFERENCES attendance.classes(id);
-alter table attendance.student_movements add constraint student_movements_from_enrolment_id_fkey FOREIGN KEY (from_enrolment_id) REFERENCES attendance.enrolments(id);
 alter table attendance.student_movements add constraint student_movements_movement_type_check CHECK (movement_type = ANY (ARRAY['TRANSFER_IN'::text, 'TRANSFER_OUT'::text, 'MOVE_CLASS'::text]));
 alter table attendance.student_movements add constraint student_movements_note_check CHECK (note IS NULL OR char_length(note) <= 500);
 alter table attendance.student_movements add constraint student_movements_pkey PRIMARY KEY (id);
-alter table attendance.student_movements add constraint student_movements_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id);
-alter table attendance.student_movements add constraint student_movements_student_id_fkey FOREIGN KEY (student_id) REFERENCES attendance.students(id);
-alter table attendance.student_movements add constraint student_movements_to_class_id_fkey FOREIGN KEY (to_class_id) REFERENCES attendance.classes(id);
-alter table attendance.student_movements add constraint student_movements_to_enrolment_id_fkey FOREIGN KEY (to_enrolment_id) REFERENCES attendance.enrolments(id);
 alter table attendance.students add constraint students_pkey PRIMARY KEY (id);
-alter table attendance.students add constraint students_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
 alter table attendance.students add constraint students_school_id_student_ref_key UNIQUE (school_id, student_ref);
-alter table attendance.teacher_class_assignments add constraint teacher_class_assignments_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE CASCADE;
 alter table attendance.teacher_class_assignments add constraint teacher_class_assignments_pkey PRIMARY KEY (user_id, class_id);
 alter table attendance.teacher_class_assignments add constraint teacher_class_assignments_role_check CHECK (role = ANY (ARRAY['teacher'::text, 'viewer'::text]));
-alter table attendance.teacher_class_assignments add constraint teacher_class_assignments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table attendance.teacher_school_memberships add constraint teacher_school_memberships_pkey PRIMARY KEY (user_id, school_id);
 alter table attendance.teacher_school_memberships add constraint teacher_school_memberships_role_check CHECK (role = ANY (ARRAY['admin'::text, 'teacher'::text, 'viewer'::text]));
-alter table attendance.teacher_school_memberships add constraint teacher_school_memberships_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
-alter table attendance.teacher_school_memberships add constraint teacher_school_memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_approved_assignment_type_check CHECK (approved_assignment_type IS NULL OR (approved_assignment_type = ANY (ARRAY['class_teacher'::text, 'assistant_teacher'::text])));
-alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_approved_class_id_fkey FOREIGN KEY (approved_class_id) REFERENCES attendance.classes(id) ON DELETE RESTRICT;
 alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_full_name_check CHECK (char_length(btrim(full_name)) >= 2 AND char_length(btrim(full_name)) <= 120);
 alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_pkey PRIMARY KEY (id);
-alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_requested_class_id_fkey FOREIGN KEY (requested_class_id) REFERENCES attendance.classes(id) ON DELETE RESTRICT;
 alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_requested_role_check CHECK (requested_role = ANY (ARRAY['class_teacher'::text, 'assistant_teacher'::text]));
-alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
 alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_status_check CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]));
-alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-alter table attendance.terms add constraint terms_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES attendance.academic_years(id) ON DELETE CASCADE;
 alter table attendance.terms add constraint terms_academic_year_id_term_no_key UNIQUE (academic_year_id, term_no);
 alter table attendance.terms add constraint terms_check CHECK (end_date >= start_date);
 alter table attendance.terms add constraint terms_pkey PRIMARY KEY (id);
 alter table attendance.terms add constraint terms_term_no_check CHECK (term_no >= 1 AND term_no <= 12);
 alter table attendance_private.attendance_record_audit add constraint attendance_record_audit_action_check CHECK (action = ANY (ARRAY['INSERT'::text, 'UPDATE'::text, 'DELETE'::text]));
 alter table attendance_private.attendance_record_audit add constraint attendance_record_audit_pkey PRIMARY KEY (audit_id);
+alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_pkey PRIMARY KEY (id);
+alter table attendance.academic_years add constraint academic_years_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
+alter table attendance.attendance_records add constraint attendance_records_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+alter table attendance.attendance_records add constraint attendance_records_daily_register_id_fkey FOREIGN KEY (daily_register_id) REFERENCES attendance.daily_registers(id) ON DELETE CASCADE;
+alter table attendance.attendance_records add constraint attendance_records_enrolment_id_fkey FOREIGN KEY (enrolment_id) REFERENCES attendance.enrolments(id) ON DELETE CASCADE;
+alter table attendance.attendance_records add constraint attendance_records_reason_code_fkey FOREIGN KEY (reason_code) REFERENCES attendance.absence_reasons(code);
+alter table attendance.attendance_records add constraint attendance_records_status_code_fkey FOREIGN KEY (status_code) REFERENCES attendance.attendance_codes(code);
+alter table attendance.attendance_records add constraint attendance_records_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+alter table attendance.calendar_dates add constraint calendar_dates_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES attendance.academic_years(id) ON DELETE CASCADE;
+alter table attendance.calendar_dates add constraint calendar_dates_term_id_fkey FOREIGN KEY (term_id) REFERENCES attendance.terms(id) ON DELETE SET NULL;
+alter table attendance.classes add constraint classes_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES attendance.academic_years(id) ON DELETE CASCADE;
+alter table attendance.daily_registers add constraint daily_registers_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE CASCADE;
+alter table attendance.daily_registers add constraint daily_registers_started_by_fkey FOREIGN KEY (started_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+alter table attendance.daily_registers add constraint daily_registers_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+alter table attendance.daily_registers add constraint daily_registers_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+alter table attendance.enrolments add constraint enrolments_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE CASCADE;
+alter table attendance.enrolments add constraint enrolments_student_id_fkey FOREIGN KEY (student_id) REFERENCES attendance.students(id) ON DELETE CASCADE;
+alter table attendance.settings add constraint settings_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
+alter table attendance.student_movements add constraint student_movements_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id);
+alter table attendance.student_movements add constraint student_movements_from_class_id_fkey FOREIGN KEY (from_class_id) REFERENCES attendance.classes(id);
+alter table attendance.student_movements add constraint student_movements_from_enrolment_id_fkey FOREIGN KEY (from_enrolment_id) REFERENCES attendance.enrolments(id);
+alter table attendance.student_movements add constraint student_movements_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id);
+alter table attendance.student_movements add constraint student_movements_student_id_fkey FOREIGN KEY (student_id) REFERENCES attendance.students(id);
+alter table attendance.student_movements add constraint student_movements_to_class_id_fkey FOREIGN KEY (to_class_id) REFERENCES attendance.classes(id);
+alter table attendance.student_movements add constraint student_movements_to_enrolment_id_fkey FOREIGN KEY (to_enrolment_id) REFERENCES attendance.enrolments(id);
+alter table attendance.students add constraint students_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
+alter table attendance.teacher_class_assignments add constraint teacher_class_assignments_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE CASCADE;
+alter table attendance.teacher_class_assignments add constraint teacher_class_assignments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+alter table attendance.teacher_school_memberships add constraint teacher_school_memberships_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
+alter table attendance.teacher_school_memberships add constraint teacher_school_memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_approved_class_id_fkey FOREIGN KEY (approved_class_id) REFERENCES attendance.classes(id) ON DELETE RESTRICT;
+alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_requested_class_id_fkey FOREIGN KEY (requested_class_id) REFERENCES attendance.classes(id) ON DELETE RESTRICT;
+alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
+alter table attendance.teacher_signup_requests add constraint teacher_signup_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+alter table attendance.terms add constraint terms_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES attendance.academic_years(id) ON DELETE CASCADE;
 alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
 alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_class_id_fkey FOREIGN KEY (class_id) REFERENCES attendance.classes(id) ON DELETE SET NULL;
-alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_pkey PRIMARY KEY (id);
 alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_request_id_fkey FOREIGN KEY (request_id) REFERENCES attendance.teacher_signup_requests(id) ON DELETE SET NULL;
 alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_school_id_fkey FOREIGN KEY (school_id) REFERENCES attendance.schools(id) ON DELETE CASCADE;
 alter table attendance_private.teacher_access_audit add constraint teacher_access_audit_subject_user_id_fkey FOREIGN KEY (subject_user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
@@ -434,7 +434,7 @@ begin
     return old;
   end if;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION attendance_private.stamp_record_actor()
  RETURNS trigger
@@ -451,7 +451,7 @@ begin
   end if;
   return new;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION attendance_private.stamp_register_actor()
  RETURNS trigger
@@ -478,7 +478,7 @@ begin
 
   return new;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION attendance_private.touch_updated_at()
  RETURNS trigger
@@ -489,7 +489,7 @@ begin
   new.updated_at := now();
   return new;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION attendance.can_access_class(target_class_id uuid)
  RETURNS boolean
@@ -521,7 +521,7 @@ AS $function$
            )
          )
      );
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION attendance.is_school_admin(target_school_id uuid)
  RETURNS boolean
@@ -538,7 +538,7 @@ AS $function$
          and m.active
          and m.role = 'admin'
      );
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION attendance.is_school_member(target_school_id uuid)
  RETURNS boolean
@@ -554,7 +554,7 @@ AS $function$
          and m.user_id = (select auth.uid())
          and m.active
      );
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_move_class(p_enrolment_id uuid, p_to_class_id uuid, p_move_date date, p_remarks text DEFAULT NULL::text)
  RETURNS jsonb
@@ -675,7 +675,7 @@ begin
     )
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_review_teacher_request(p_request_id uuid, p_action text, p_class_id uuid DEFAULT NULL::uuid, p_assignment_type text DEFAULT NULL::text, p_admin_note text DEFAULT NULL::text)
  RETURNS jsonb
@@ -764,7 +764,7 @@ begin
     'assignment_type',v_assignment_type
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_school_dashboard(p_school_id uuid, p_month date)
  RETURNS jsonb
@@ -911,7 +911,7 @@ begin
     'classes',v_classes
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_set_teacher_active(p_user_id uuid, p_school_id uuid, p_active boolean)
  RETURNS jsonb
@@ -951,7 +951,7 @@ begin
 
   return jsonb_build_object('ok',true,'user_id',p_user_id,'school_id',p_school_id,'active',p_active);
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_student_roster(p_school_id uuid)
  RETURNS jsonb
@@ -1060,7 +1060,7 @@ begin
 
   return v_result;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_teacher_requests(p_status text DEFAULT 'pending'::text)
  RETURNS jsonb
@@ -1109,7 +1109,7 @@ begin
 
   return v_result;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_teachers()
  RETURNS jsonb
@@ -1150,7 +1150,7 @@ begin
 
   return v_result;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_transfer_in(p_school_id uuid, p_class_id uuid, p_student_ref text, p_full_name text, p_gender text, p_start_date date, p_reporting_group text DEFAULT 'Mainstream'::text, p_include_in_class_stats boolean DEFAULT true, p_remarks text DEFAULT NULL::text)
  RETURNS jsonb
@@ -1263,7 +1263,7 @@ begin
     'backfill_registers', v_backfill
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_admin_transfer_out(p_enrolment_id uuid, p_last_date date, p_remarks text DEFAULT NULL::text)
  RETURNS jsonb
@@ -1338,7 +1338,7 @@ begin
     )
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_bootstrap()
  RETURNS jsonb
@@ -1400,7 +1400,7 @@ AS $function$
       where active
     ), '[]'::jsonb)
   );
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_class_period_report(p_class_id uuid, p_period_type text, p_term_id uuid DEFAULT NULL::uuid, p_as_of_date date DEFAULT NULL::date)
  RETURNS jsonb
@@ -1557,7 +1557,7 @@ begin
 
   return v_result;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_class_report_options(p_class_id uuid)
  RETURNS jsonb
@@ -1583,7 +1583,7 @@ begin
     ),'[]'::jsonb)
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_load_register(p_class_id uuid, p_date date)
  RETURNS jsonb
@@ -1684,7 +1684,7 @@ begin
     'students', v_students
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_monthly_class_stats(p_class_id uuid, p_month date)
  RETURNS jsonb
@@ -1826,7 +1826,7 @@ begin
 
   return v_result;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_save_register(p_class_id uuid, p_date date, p_records jsonb, p_correction_reason text DEFAULT NULL::text)
  RETURNS jsonb
@@ -2066,7 +2066,7 @@ begin
     'saved_at', v_now
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_signup_options()
  RETURNS jsonb
@@ -2107,7 +2107,7 @@ AS $function$
         where ay.school_id = s.id and ay.active
       )
   ) q;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_submit_teacher_request(p_full_name text, p_requested_class_id uuid, p_requested_role text DEFAULT 'class_teacher'::text)
  RETURNS jsonb
@@ -2206,7 +2206,7 @@ begin
     'requested_role', v_role
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.attendance_teacher_status()
  RETURNS jsonb
@@ -2280,7 +2280,7 @@ begin
     'signup_request', v_request
   );
 end;
-$function$
+$function$;
 
 
 -- Triggers
