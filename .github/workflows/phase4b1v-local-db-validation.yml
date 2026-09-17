@@ -36,8 +36,8 @@ jobs:
           mkdir -p .phase4b1v/supabase/migrations
           cp supabase/baseline/attendance_v1_schema.sql \
             .phase4b1v/supabase/migrations/20260913000000_attendance_v1_schema.sql
-          cp supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql \
-            .phase4b1v/supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql
+          cp supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql \
+            .phase4b1v/supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql
           cat supabase/baseline/attendance_v1_reference_data.sql \
               supabase/fixtures/phase4b1v_reporting_fixture.sql \
             > .phase4b1v/supabase/seed.sql
@@ -60,7 +60,7 @@ jobs:
             "select version from supabase_migrations.schema_migrations order by version;")"
           printf '%s\n' "$versions"
           grep -qx '20260913000000' <<<"$versions"
-          grep -qx '20260917070000' <<<"$versions"
+          grep -qx '20260917090547' <<<"$versions"
 
           run_zero_rows() {
             local file="$1"
