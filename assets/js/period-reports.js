@@ -123,6 +123,6 @@ export function exportPeriodReport(){
   ];
   const csv='\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  const safe=(c.class_code+'_'+p.label+'_'+population).replace(/[^A-Za-z0-9_-]+/g,'_');
+  const safe=(c.class_code+'_'+p.label+(population===NON_SEN?'_'+population:'')).replace(/[^A-Za-z0-9_-]+/g,'_');
   a.href=url;a.download='SRL_Attendance_'+safe+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
