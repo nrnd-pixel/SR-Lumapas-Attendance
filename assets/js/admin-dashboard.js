@@ -1,6 +1,7 @@
 import { state, beginRequest, isLatestRequest } from './app-state.js';
 import { displayDate, formatMonthLabel } from './date-helpers.js';
 import { $, esc } from './ui-helpers.js';
+import { NON_SEN, reportingPopulation, reportingPopulationLabel } from './reporting-population.js';
 
 let sb;
 let schoolId;
@@ -14,14 +15,17 @@ export function initAdminDashboard(client,helpers){
 
 function setDashboardBanner(text,type='info'){const el=$('dashboardBanner');el.textContent=text;el.className='banner '+type;}
 export async function loadAdminDashboard(){
-  const sid=schoolId(),month=$('dashboardMonth').value;if(!sid||!month)return;
-  const serial=beginRequest('adminDashboard'),selectionKey=sid+'|'+month;
-  $('refreshDashboardBtn').disabled=true;setDashboardBanner('Loading school attendance dashboard…','info');
-  const {data,error}=await sb.rpc('attendance_admin_school_dashboard',{p_school_id:sid,p_month:month+'-01'});
-  if(!isLatestRequest('adminDashboard',serial)||(schoolId()+'|'+$('dashboardMonth').value)!==selectionKey)return;
+  const sid=schoolId(),month=$('dashboardMonth').value,population=reportingPopulation('dashboardPopulation');if(!sid||!month)return;
+  const serial=beginRequest('adminDashboard'),selectionKey=sid+'|'+month+'|'+population;
+  $('refreshDashboardBtn').disabled=true;setDashboardBanner('Loading '+reportingPopulationLabel(population)+' school dashboard…','info');
+  const rpcName=population===NON_SEN?'attendance_admin_school_dashboard_v2':'attendance_admin_school_dashboard';
+  const args={p_school_id:sid,p_month:month+'-01'};
+  if(population===NON_SEN)args.p_population=population;
+  const {data,error}=await sb.rpc(rpcName,args);
+  if(!isLatestRequest('adminDashboard',serial)||(schoolId()+'|'+$('dashboardMonth').value+'|'+reportingPopulation('dashboardPopulation'))!==selectionKey)return;
   $('refreshDashboardBtn').disabled=false;
   if(error){state.adminDashboard=null;setDashboardBanner(error.message,'warn');renderAdminDashboard();return;}
-  state.adminDashboard=data;renderAdminDashboard();
+  state.adminDashboard=data?{...data,population:data.population||population}:data;renderAdminDashboard();
 }
 function renderAdminDashboard(){
   const data=state.adminDashboard,s=data?.summary||{},latest=data?.latest_school_day||{};
@@ -36,9 +40,10 @@ function renderAdminDashboard(){
   $('dashboardClassCount').textContent=data?s.class_count:'—';
   $('dashboardGenderIncomplete').textContent=data?s.gender_incomplete_classes:'—';
   if(data){
-    if(s.registers_missing>0)setDashboardBanner('Provisional: '+s.registers_missing+' elapsed class register'+(s.registers_missing===1?' is':'s are')+' missing. School average and percentage use completed registers only. A missing register means no saved register was found — not zero attendance.','warn');
-    else if(s.provisional)setDashboardBanner('Provisional month-to-date school summary through '+displayDate(data.as_of_date)+'.','info');
-    else setDashboardBanner('Complete school summary for '+formatMonthLabel(data.month)+'.','ok');
+    const populationText=reportingPopulationLabel(data.population)+' · ';
+    if(s.registers_missing>0)setDashboardBanner(populationText+'Provisional: '+s.registers_missing+' elapsed class register'+(s.registers_missing===1?' is':'s are')+' missing. School average and percentage use completed registers only. A missing register means no saved register was found — not zero attendance.','warn');
+    else if(s.provisional)setDashboardBanner(populationText+'Provisional month-to-date school summary through '+displayDate(data.as_of_date)+'.','info');
+    else setDashboardBanner(populationText+'Complete school summary for '+formatMonthLabel(data.month)+'.','ok');
   }
   const lb=$('dashboardLatestBody');
   const latestRows=latest.classes||[];
@@ -52,6 +57,6 @@ function renderAdminDashboard(){
     return '<tr class="'+(r.registers_missing?'missing-row':'')+'"><td>'+esc(r.class_code)+'</td><td>'+r.pupils+'</td><td>'+r.registers_completed+'/'+totalRegs+'</td><td>'+r.cumulative_total+'</td><td>'+(r.average_attendance==null?'—':Number(r.average_attendance).toFixed(4))+'</td><td>'+(r.attendance_percentage==null?'—':Number(r.attendance_percentage).toFixed(2)+'%')+'</td><td><button class="btn btn-light dashboard-view" data-class="'+esc(r.class_id)+'">View</button></td></tr>';
   }).join('');
   cb.querySelectorAll('.dashboard-view').forEach(b=>b.addEventListener('click',()=>{
-    openStatisticsForClass(b.dataset.class,data.month);
+    openStatisticsForClass(b.dataset.class,data.month,data.population||'whole_class');
   }));
 }
