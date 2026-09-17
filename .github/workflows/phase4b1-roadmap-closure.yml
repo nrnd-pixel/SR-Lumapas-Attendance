@@ -1,0 +1,107 @@
+name: Phase 4B1 Roadmap Closure
+
+on:
+  push:
+    branches:
+      - docs/phase-4b1-closure
+    paths:
+      - .github/workflows/phase4b1-roadmap-closure.yml
+
+permissions:
+  contents: write
+
+jobs:
+  close-roadmap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/phase-4b1-closure
+          fetch-depth: 0
+
+      - name: Update roadmap losslessly
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md')
+          text = path.read_text()
+
+          replacements = [
+            (
+              '**Status:** Phase 4A is complete and merged via PR #49. Phase 4B1 backend shared-model work is in draft PR #50; Phase 4B2 frontend population selectors have not started.',
+              '**Status:** Phase 4A and Phase 4B1 repository/source work are complete and merged. Phase 4B1V isolated database execution validation is the next checkpoint; Phase 4B2 frontend population selectors have not started.'
+            ),
+            (
+              '**Repository implementation is in draft PR #50; the proposed v13 migration is not applied to live Supabase.**',
+              '**Repository implementation is complete and merged via PR #50 as signed `main` commit `ecea2fc99a79c4af07d3b70bca3dcb240c57aacc`; the proposed v13 migration is still not applied to live Supabase.**'
+            ),
+            (
+              '**Current checkpoint:** Phase 4B1 — shared reporting-model repository implementation is in draft PR #50. Phase 4A is complete and merged; Phase 4B2 has not started.',
+              '**Current checkpoint:** Phase 4B1 repository/source implementation is complete and merged. Phase 4B1V isolated local-Supabase execution validation is next; Phase 4B2 has not started.'
+            ),
+            (
+              '- Exact current signed cleanup `main`: `c205249763ca5a1d81affe32ff90ec8ed8d865f2`, the Phase 4A merge from PR #49. Its tree is `3798510c8a810ec0f86c6cebfeb270129212e694`; GitHub signature verification is valid.',
+              '- Exact current signed cleanup `main`: `ecea2fc99a79c4af07d3b70bca3dcb240c57aacc`, the Phase 4B1 merge from PR #50. Its tree is `577182114b230758a6693f1c3c3ff092e6b08119`; GitHub signature verification is valid.'
+            ),
+            (
+              '- Draft PR #50 branch `cleanup/phase-4b1-shared-reporting-engine` adds repository-only migration source `supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql`, an internal `attendance.reporting_class_period_facts(...)` calculation engine, evolved backend-contract/reconstruction documentation, and a read-only shared-engine equivalence verifier. No frontend JavaScript/HTML, Netlify, Science, production data, or live database object has been changed.',
+              '- PR #50 branch `cleanup/phase-4b1-shared-reporting-engine` merged repository-only migration source `supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql`, internal `attendance.reporting_class_period_facts(...)`, evolved backend-contract/reconstruction documentation, and the read-only shared-engine equivalence verifier. No frontend JavaScript/HTML, Netlify, Science, production data, or live database object was changed by the merge.'
+            ),
+            (
+              '- Pre-roadmap draft PR #50 head `6762b575958e23dabcc27fc4140c6ca54f178002` passed Phase 0A, Phase 0B, and the full Playwright suite. Because this roadmap commit changes the PR head, exact-final-head CI is still mandatory before readiness review.',
+              '- Exact approved PR #50 head `c5483dbc366978846d6532f9bb273c041bb0b811` passed Phase 0A `35161452577`, Phase 0B `35161452452`, and Phase 1 Playwright `35161452255` with 53/53 Chromium tests in 22.7s, Node `v22.23.2`, npm `10.9.8`, and 0 vulnerabilities before merge.'
+            ),
+            (
+              '**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main`, PR #50, or the repository v13 migration file as a production release/application.',
+              '**Production safeguard:** keep v0.7 live and unchanged during cleanup. Do not treat cleanup `main` or the merged repository v13 migration file as a production release/application.'
+            ),
+            (
+              '**Next action:** run exact-final-head Phase 0A, Phase 0B, and full Playwright verification for PR #50; inspect the complete six-file diff and all review threads/comments. If clean, stop for explicit merge approval. Even after repository merge, do not apply the v13 migration to live Supabase without a separate explicit approval; after any approved application, run the catalog contract, both reporting-equivalence verifiers, and relevant Supabase advisors before Phase 4B2. Do not begin Phase 4B2, Phase 5, deployment, or promotion automatically.',
+              '**Next action:** Phase 4B1V only — add and verify an isolated local-Supabase execution path that applies the reconstructed Attendance baseline plus repository v13 in a synthetic non-production database and runs the catalog/equivalence checks. Do not create a paid hosted branch, apply v13 to live Supabase, begin Phase 4B2/Phase 5, deploy, or promote automatically.'
+            ),
+            (
+              '- Live reporting logic remains duplicated across large RPCs until the proposed Phase 4B1 v13 migration is separately approved and applied; repository PR #50 contains the consolidation source but does not itself change production.',
+              '- Live reporting logic remains duplicated across large RPCs until the merged Phase 4B1 v13 migration is separately approved and applied; cleanup `main` contains the consolidation source but production remains on v12.'
+            ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence, found {count}: {old[:100]}')
+              text = text.replace(old, new, 1)
+
+          marker = '## Change log\n\n'
+          if text.count(marker) != 1:
+              raise SystemExit('Change log marker missing or duplicated')
+
+          entry = (
+              '- **17 Sep 2026:** Phase 4B1 repository/source checkpoint completed. PR #50 exact approved head '
+              '`c5483dbc366978846d6532f9bb273c041bb0b811` passed Phase 0A `35161452577`, Phase 0B '
+              '`35161452452`, and Playwright `35161452255` with 53/53 Chromium tests in 22.7s, then merged with '
+              'the expected-head guard as signed cleanup `main` `ecea2fc99a79c4af07d3b70bca3dcb240c57aacc` '
+              '(tree `577182114b230758a6693f1c3c3ff092e6b08119`). The merge records the shared reporting-model '
+              'v13 source only; live Supabase remains on `20260906125521 attendance_v12_term_ytd_reporting`, live v0.7 '
+              'is unchanged, and no frontend/Science/Netlify/production-data mutation occurred. No existing Supabase '
+              'development branch is available. Repository inspection found no `supabase/config.toml` and no database-execution '
+              'CI, so Phase 4B1V will separately validate v13 in an isolated local Supabase stack with synthetic data before any '
+              'production application or Phase 4B2.\n'
+          )
+          text = text.replace(marker, marker + entry, 1)
+          path.write_text(text)
+          PY
+
+      - name: Verify scope and remove temporary workflow
+        run: |
+          git diff -- ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md
+          test -n "$(git diff -- ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md)"
+          git rm .github/workflows/phase4b1-roadmap-closure.yml
+
+      - name: Commit closure
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md
+          git commit -m "Docs: close Phase 4B1 checkpoint"
+          git push origin HEAD:docs/phase-4b1-closure
