@@ -22,7 +22,7 @@ jobs:
           import re
           import sys
 
-          v13_path = "supabase/migrations/20260917070000_attendance_v13_shared_reporting_model.sql"
+          v13_path = "supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",

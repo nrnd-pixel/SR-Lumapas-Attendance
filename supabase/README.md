@@ -17,6 +17,8 @@ Later repository migration files under `migrations/` are incremental cleanup-v1.
 schema/function changes. They are source-controlled proposals until their exact PR
 head is verified and the live application step is separately approved. Do not
 assume a repository migration has been applied merely because it exists on `main`.
+The Phase 4B1 v13 reporting migration is the first cleanup migration separately
+approved and applied to production; its live version is recorded below.
 
 Do not place any of the following in this public repository:
 
@@ -64,7 +66,8 @@ redirects; Phase 0B does not change that configuration.
   history that has actually been observed in production; private roster/pilot seed
   SQL is intentionally omitted.
 - `migrations/` — repository-owned incremental Attendance cleanup migrations after
-  the Phase 0B snapshot. A file here is not proof of live application.
+  the Phase 0B snapshot. A file here is not proof of live application; consult the
+  sanitized production migration history for live application state.
 - `verify/attendance_contract.sql` — non-mutating catalog assertions to run after
   loading the Phase 0B baseline **and** all repository Attendance migrations.
 - `verify/attendance_reporting_population_fixtures.sql` — aggregate-only read-only
@@ -90,11 +93,14 @@ The Phase 0B baseline intentionally does not replay the live project's historica
 migration chain. Snapshot #2 recorded Attendance migration names including
 pupil-roster/pilot seed migrations whose SQL may contain private data.
 
-## Phase 4B1 reporting source boundary
+## Phase 4B1 reporting source and production boundary
 
-`migrations/20260917070000_attendance_v13_shared_reporting_model.sql` is the
-repository source for the proposed Phase 4B1 reporting consolidation. At the
-repository-only checkpoint it must remain unapplied to live Supabase.
+`migrations/20260917090547_attendance_v13_shared_reporting_model.sql` is the
+repository source for the Phase 4B1 reporting consolidation. Its SQL bytes are the
+same reviewed source that originally entered the repository under version
+`20260917070000`; Phase 4B1P renames the repository file only so its migration
+version matches the live production ledger created by the approved Supabase
+application on 17 September 2026.
 
 It introduces:
 
@@ -108,6 +114,21 @@ It introduces:
   wrappers, preserving current v0.7 callers;
 - explicit population keys `whole_class` and `non_sen`; Non-SEN filtering uses
   `include_in_class_stats=true` and never parses free-text `reporting_group`.
+
+Phase 4B1V PR #53 validated the reconstructed baseline plus v13 in an isolated local
+Supabase stack before production application. The exact-head local validation
+applied both migrations and passed `attendance_contract.sql`, the reporting
+population fixture verifier, the shared-engine equivalence verifier, and the public
+legacy/v2 API verifier. The standard Phase 0A, Phase 0B, and 53/53 Playwright gates
+also passed before PR #53 merged.
+
+Production application was separately approved and then recorded by Supabase as
+`20260917090547 attendance_v13_shared_reporting_model`. Post-application checks
+confirmed all seven expected reporting functions, the intended invoker/definer and
+EXECUTE grant boundaries, exact Whole-Class legacy-wrapper compatibility, all four
+protected 3A Whole-Class/Non-SEN fixtures, and all 15 Dashboard classes. No
+Attendance table/data migration, Science change, Netlify change, or cleanup-v1.0
+frontend deployment was part of that production application.
 
 Supabase's current Data API guidance recommends unique function names rather than
 overloading API-exposed database functions, so Phase 4B1 uses `*_v2` names instead

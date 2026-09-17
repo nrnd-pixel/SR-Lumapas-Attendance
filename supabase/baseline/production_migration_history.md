@@ -1,7 +1,9 @@
 # Production Attendance migration history (sanitized)
 
 This file records **version/name metadata only** from the live Supabase migration
-history captured during Phase 0B on 13 September 2026.
+history. The initial Phase 0B capture was taken on 13 September 2026; later
+approved public-safe Attendance migration metadata is appended when production
+state materially changes.
 
 It deliberately omits:
 
@@ -13,7 +15,8 @@ It deliberately omits:
 
 Historical roster/pilot seed migrations are marked **PRIVATE DATA — OMITTED**.
 Their SQL must never be reconstructed into this public repository. The current
-database structure is represented instead by `attendance_v1_schema.sql`.
+database structure is represented instead by `attendance_v1_schema.sql` plus the
+repository-owned incremental migration files.
 
 | Version | Migration name | Public baseline handling |
 | --- | --- | --- |
@@ -48,5 +51,6 @@ database structure is represented instead by `attendance_v1_schema.sql`.
 | `20260906124236` | `attendance_v10_monthly_stats_partial_month_guard` | Structure represented cumulatively |
 | `20260906124859` | `attendance_v10_admin_school_dashboard` | Structure represented cumulatively |
 | `20260906125521` | `attendance_v12_term_ytd_reporting` | Structure represented cumulatively |
+| `20260917090547` | `attendance_v13_shared_reporting_model` | Public repository migration; production-applied and verified 17 Sep 2026 |
 
-Attendance migrations captured: **31**.
+Attendance migrations recorded: **32**.
