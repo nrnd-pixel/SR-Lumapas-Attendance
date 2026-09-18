@@ -184,6 +184,46 @@ rollback;
 -- 4. Assigned teacher and outsider remain unable to invoke admin teacher-management writes.
 begin;
 
+-- Keep this verifier self-contained: Phase 5A already seeds these identities,
+-- while Phase 4B1V does not. Idempotent inserts make both workflows equivalent.
+insert into auth.users(id,email,aud,role,created_at,updated_at)
+values
+  (
+    '00000000-0000-0000-0000-000000000100'::uuid,
+    'phase5d-teacher@example.invalid',
+    'authenticated',
+    'authenticated',
+    now(),
+    now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000101'::uuid,
+    'phase5d-outsider@example.invalid',
+    'authenticated',
+    'authenticated',
+    now(),
+    now()
+  )
+on conflict (id) do nothing;
+
+insert into attendance.teacher_school_memberships(user_id,school_id,role,active)
+values (
+  '00000000-0000-0000-0000-000000000100'::uuid,
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  'teacher',
+  true
+)
+on conflict (user_id,school_id) do nothing;
+
+insert into attendance.teacher_class_assignments(user_id,class_id,role,active)
+values (
+  '00000000-0000-0000-0000-000000000100'::uuid,
+  '00000000-0000-0000-0000-000000000004'::uuid,
+  'teacher',
+  true
+)
+on conflict (user_id,class_id) do nothing;
+
 insert into attendance.teacher_signup_requests(
   id,user_id,school_id,requested_class_id,full_name,email,requested_role,status
 ) values (
