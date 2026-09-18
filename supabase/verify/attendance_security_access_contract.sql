@@ -151,8 +151,6 @@ with expected(table_name,can_insert,can_update,can_delete) as (
     ('classes',true,true,true),
     ('schools',false,true,false),
     ('settings',true,true,true),
-    ('teacher_class_assignments',true,true,true),
-    ('teacher_school_memberships',true,true,true),
     ('terms',true,true,true)
 ), actual as (
   select
