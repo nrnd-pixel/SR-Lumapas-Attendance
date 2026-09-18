@@ -167,6 +167,18 @@ where not has_table_privilege('authenticated', x.table_name, 'SELECT')
    or has_table_privilege('authenticated', x.table_name, 'UPDATE')
    or has_table_privilege('authenticated', x.table_name, 'DELETE');
 
+-- 8c. Phase 5D teacher-management write boundary: authenticated keeps read
+-- access needed by bootstrap/status, but admin mutations must use coordinated RPCs.
+select 'teacher_management_write_boundary' as check_name, x.table_name as mismatch
+from (values
+  ('attendance.teacher_school_memberships'::text),
+  ('attendance.teacher_class_assignments'::text)
+) x(table_name)
+where not has_table_privilege('authenticated', x.table_name, 'SELECT')
+   or has_table_privilege('authenticated', x.table_name, 'INSERT')
+   or has_table_privilege('authenticated', x.table_name, 'UPDATE')
+   or has_table_privilege('authenticated', x.table_name, 'DELETE');
+
 -- 9. Exact non-sensitive reference-code sets
 with expected(code) as (
   select unnest(array['P','PP','A','L','PM','TM','T','SS','D','X','SP','W','Q']::text[])
