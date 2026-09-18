@@ -233,7 +233,7 @@ Actions:
 **Exit:** one calculation model drives all reporting surfaces, and the requested reporting population is explicit and mathematically consistent across all outputs.
 
 ### Phase 5 — Security and access cleanup
-**Status:** Phase 5A Security Contract Safety Net is implemented; the normalized candidate is green and final documented-head normalization/CI is pending. No live security mutation has started.
+**Status:** Phase 5A Security Contract Safety Net is complete and merged on cleanup `main`. Phase 5B has not started; no live security mutation has occurred.
 **Goal:** Make the trust boundary explicit and minimal.
 
 Fresh Phase 5 impact-map findings:
@@ -249,7 +249,7 @@ Fresh Phase 5 impact-map findings:
 - current public-schema default privileges still auto-grant future public tables/functions/sequences to Data API roles. Because the Supabase project is shared with Science, do not change project-wide `public` defaults in an Attendance-only checkpoint; keep explicit per-object Attendance grants/revokes and verify them instead.
 
 Proposed checkpoint split:
-- **5A — Security contract safety net:** repository/local-test only. Add a synthetic role-based security verifier and isolated local-Supabase gate covering RPC EXECUTE boundaries, anonymous/unauthorized/assigned-teacher/admin access, current direct-DML baseline exposure, controlled `attendance_save_register` and student-movement RPC dependencies, private-audit inaccessibility, `SECURITY DEFINER` search-path/auth markers, and the intentional anonymous signup-options exception. **Implemented from signed base `289fe1c05fe2ce11e70000da50ba575bcdd8aff5`. Pre-normalization head `c862a8615fb0a4ef7e8d5b4bff367350a34f47a5` passed all five gates. One-commit normalized candidate `b3093353c55e86e3f8641f2de15f73ade0bc01d3` then passed Phase 0A `35314716791`, Phase 0B `35314716814`, Playwright `35314716843` (60/60 in 19.5s), Phase 4B1V Local DB Validation `35314716784`, and Phase 5A Security Access Validation `35314716803`. Final documented-head normalization/current-head CI and explicit merge approval remain mandatory. No live migration/Auth setting change is permitted.**
+- **5A — Security contract safety net:** repository/local-test only. Add a synthetic role-based security verifier and isolated local-Supabase gate covering RPC EXECUTE boundaries, anonymous/unauthorized/assigned-teacher/admin access, current direct-DML baseline exposure, controlled `attendance_save_register` and student-movement RPC dependencies, private-audit inaccessibility, `SECURITY DEFINER` search-path/auth markers, and the intentional anonymous signup-options exception. **Complete and merged via PR #59 as signed cleanup `main` commit `16425a337a000c9db4db8a63c7c2ca21902a7ead`; approved exact final head `68174078a86d0f2098e7d6f1dda9bea00d0d4b32`, tree `93860907833a5f277ecd39cda788193aa7378375`. Exact-final-head gates passed: Phase 0A `35315054747`, Phase 0B `35315054722`, Playwright `35315054721` with 60/60 Chromium tests in 26.4s, Phase 4B1V Local DB Validation `35315054737`, and Phase 5A Security Access Validation `35315054732`. No live migration/Auth setting change was made.**
 - **5B — Attendance register write boundary:** only after 5A approval/merge, move `attendance_save_register` write authority behind a controlled privileged RPC boundary and revoke authenticated INSERT/UPDATE/DELETE on `daily_registers` / `attendance_records` while preserving read/RPC behavior, correction audits, complete-roster checks, non-school-day rejection, and correction-reason semantics.
 - **5C — Student movement write boundary:** preserve Transfer In/Out/Move Class signatures and history semantics while removing authenticated direct writes to `students`, `enrolments`, and `student_movements`.
 - **5D — Teacher-management write boundary:** revoke direct authenticated writes to teacher memberships/assignments after proving existing teacher-admin RPCs are sufficient; keep bootstrap/status reads working.
@@ -411,26 +411,26 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 5A Security Contract Safety Net is implemented and its one-commit normalized candidate is fully green. The final documented-head normalization/CI seal remains before merge approval. No live Supabase/Auth/security mutation, frontend runtime change, Science change, deployment, or production-data mutation has occurred.
+**Current checkpoint:** Phase 5A Security Contract Safety Net is complete and merged. Phase 5B Attendance Register Write Boundary has not started.
 
-- Exact signed Phase 5A base `main`: `289fe1c05fe2ce11e70000da50ba575bcdd8aff5`; tree `86ec54effd31735a32bfb37afe4ca210bedc367b`; GitHub signature valid.
-- Working branch / draft PR: `cleanup/phase-5a-security-contract-safety-net` / PR #59.
-- One-commit normalized candidate: `b3093353c55e86e3f8641f2de15f73ade0bc01d3`, exactly 1 commit ahead / 0 behind signed base with exactly five changed files and no migration/runtime file.
-- New security verifier passes on a fresh local Supabase stack and exercises actual `anon`, unauthorized authenticated, assigned-teacher, and admin role behavior plus rollback-only direct DML and controlled RPC writes.
-- Normalized-candidate gates all passed: Phase 0A `35314716791`; Phase 0B `35314716814`; Playwright `35314716843` with 60/60 Chromium tests in 19.5s, Node `v22.23.2`, npm `10.9.8`, 0 vulnerabilities; Phase 4B1V Local DB Validation `35314716784`; Phase 5A Security Access Validation `35314716803`.
-- Phase 4B1V re-proved `attendance_contract.sql`, reporting-population fixtures, v13 shared-engine equivalence, and legacy/v2 public reporting API compatibility after the Phase 5A files were added.
-- Phase 5A independently re-proved `attendance_contract.sql` plus `attendance_security_access_contract.sql` after reconstructing baseline migration `20260913000000` plus v13 `20260917090547`.
-- The security verifier freezes the current 21-RPC security-mode inventory, explicit EXECUTE boundaries, exact 13-table direct-write surface, RLS/private-audit isolation, internal helper non-exposure, and controlled write paths that Phase 5B/5C must preserve before revocation.
-- Current Supabase platform guidance confirms grants and RLS are separate layers and is moving Data API exposure toward explicit grants. Project-wide public default-privilege changes remain out of scope because Science shares the project.
-- No production Supabase project state has been mutated by Phase 5A.
+- Exact current signed cleanup `main`: `16425a337a000c9db4db8a63c7c2ca21902a7ead`; tree `93860907833a5f277ecd39cda788193aa7378375`; parents `289fe1c05fe2ce11e70000da50ba575bcdd8aff5` and approved PR #59 head `68174078a86d0f2098e7d6f1dda9bea00d0d4b32`; GitHub signature valid.
+- Phase 5A is repository/local evidence only: synthetic fixture, security/access verifier, dedicated isolated-Supabase workflow, Phase 0B contract inclusion, and roadmap bookkeeping. No migration file or frontend runtime file was included.
+- Exact-final-head verification passed: Phase 0A `35315054747`; Phase 0B `35315054722`; Playwright `35315054721` with 60/60 Chromium tests in 26.4s, Node `v22.23.2`, npm `10.9.8`, 0 vulnerabilities; Phase 4B1V Local DB Validation `35315054737`; Phase 5A Security Access Validation `35315054732`.
+- The Phase 5A verifier now freezes the current 21-RPC security-mode inventory, explicit EXECUTE boundaries, exact 13-table authenticated direct-write surface, RLS/private-audit isolation, internal reporting-helper non-exposure, and the controlled write paths later hardening must preserve.
+- The local security workflow exercises actual synthetic `anon`, unauthorized authenticated, assigned-teacher, and admin behavior; direct-DML exposure and controlled write paths run only inside rollback transactions.
+- Phase 4 reporting equivalence remained green under the Phase 5A branch, including reporting-population fixtures, v13 shared-engine equivalence, and legacy/v2 public reporting API compatibility.
+- Production Supabase, Auth settings, live v0.7, Science, Attendance production data, Netlify, and deployment remain unchanged by Phase 5A.
+- The known next security issue remains authenticated direct write privilege on `attendance.daily_registers` and `attendance.attendance_records`, while `attendance_save_register` currently depends on those grants because it is invoker-mode.
 
-**Production safeguard:** protected live v0.7 and production Supabase remain unchanged. Phase 5A is evidence-building only; any Phase 5B write-boundary migration requires a separate impact map, explicit approval, isolated validation, and explicit production-application approval.
+**Production safeguard:** Phase 5B will be the first checkpoint that may propose a production security migration affecting live v0.7's backend. Before any implementation, re-map the exact current `attendance_save_register` function body, its RLS/table-grant dependencies, audit triggers, correction GUC semantics, register/record policies, client-facing RPC signature/returned fields, synthetic Phase 5A tests, and rollback path. Do not apply any production mutation during the impact map.
 
-**Next action:** fold this final roadmap bookkeeping into the one-commit PR head, rerun all five gates on that exact documented head, review the five-file diff and review surfaces, and stop for explicit merge approval. Do not start Phase 5B automatically.
+**Next action:** perform **Phase 5B Attendance Register Write Boundary impact mapping only** from exact signed `main` `16425a337a000c9db4db8a63c7c2ca21902a7ead`. Propose the smallest reversible migration/test plan that can move register/record writes behind the controlled RPC while preserving the existing public RPC signature, class authorization, complete-roster checks, non-school-day rejection, correction reason/count/audit behavior, enrolment-date eligibility, untouched status-code preservation, and live v0.7 compatibility. Stop for explicit approval before creating a migration or changing live Supabase.
 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **18 Sep 2026:** Phase 5A Security Contract Safety Net completed and merged via PR #59. Approved exact final head `68174078a86d0f2098e7d6f1dda9bea00d0d4b32` passed Phase 0A `35315054747`, Phase 0B `35315054722`, Playwright `35315054721` (60/60 in 26.4s), Phase 4B1V Local DB Validation `35315054737`, and Phase 5A Security Access Validation `35315054732`. It merged as signed cleanup `main` `16425a337a000c9db4db8a63c7c2ca21902a7ead` with tree `93860907833a5f277ecd39cda788193aa7378375`. The checkpoint added repository/local security evidence only; no production Supabase/Auth, frontend runtime, Science, data, Netlify, or deployment mutation occurred. Phase 5B remains unstarted and requires an impact map before any migration.
 
 - **18 Sep 2026:** Phase 5A one-commit normalized candidate `b3093353c55e86e3f8641f2de15f73ade0bc01d3` passed Phase 0A `35314716791`, Phase 0B `35314716814`, Playwright `35314716843` (60/60 in 19.5s), Phase 4B1V Local DB Validation `35314716784`, and Phase 5A Security Access Validation `35314716803`. The existing reporting reconstruction remained green and the new role-level security verifier passed. Final documented-head normalization and exact-head CI remain required before merge approval.
 
