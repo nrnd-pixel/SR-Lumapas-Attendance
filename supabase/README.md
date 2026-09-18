@@ -158,10 +158,10 @@ four protected Whole-Class/Non-SEN reporting fixtures remained exact. This
 repository reconciliation must not apply or reapply v14 to production.
 
 
-## Phase 5C student movement write boundary — repository/local candidate
+## Phase 5C student movement write boundary — merged repository candidate
 
 `migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql`
-is the repository/local Phase 5C candidate. It is **not applied to production**.
+is the merged repository Phase 5C source from PR #68. It is **not applied to production**; live Supabase remains on v14 until a separate production-application checkpoint is explicitly approved.
 
 The migration preserves the existing public Transfer In / Transfer Out / Move Class
 function signatures and JSON return shapes while moving their writes behind a
@@ -184,9 +184,11 @@ attendance records; and Move Class preserves old-class attendance while creating
 the new eligibility boundary and movement history.
 
 The standard Phase 0B, Phase 4B1V, and Phase 5A workflows reconstruct v15 only in
-isolated CI/local Supabase stacks. Production migration history must not be updated,
-and v15 must not be applied to live Supabase, until a separate production-application
-checkpoint is explicitly approved.
+isolated CI/local Supabase stacks. PR #68 final head
+`a2b8da0f4e7eaf49cbc74194e1bbff2d85a851b0` passed all five required gates before
+merging as `main` `73ea8383ebb95872eafa92a4932b176987ba1ab0`. Production migration history must
+not be updated, and v15 must not be applied to live Supabase, until a separate
+production-application checkpoint is explicitly approved.
 
 ## Known captured risks — preserved, not fixed here
 
