@@ -40,7 +40,7 @@ with expected(name, identity_args, result_type, security_definer) as (
     ('attendance_load_register', 'p_class_id uuid, p_date date', 'jsonb', false),
     ('attendance_monthly_class_stats', 'p_class_id uuid, p_month date', 'jsonb', true),
     ('attendance_monthly_class_stats_v2', 'p_class_id uuid, p_month date, p_population text', 'jsonb', true),
-    ('attendance_save_register', 'p_class_id uuid, p_date date, p_records jsonb, p_correction_reason text', 'jsonb', false),
+    ('attendance_save_register', 'p_class_id uuid, p_date date, p_records jsonb, p_correction_reason text', 'jsonb', true),
     ('attendance_signup_options', '', 'jsonb', true),
     ('attendance_submit_teacher_request', 'p_full_name text, p_requested_class_id uuid, p_requested_role text', 'jsonb', true),
     ('attendance_teacher_status', '', 'jsonb', true)
@@ -142,19 +142,17 @@ where not exists (
     and not t.tgisinternal
 );
 
--- 8. Captured direct-DML state is intentionally preserved in Phase 0B.
--- This is a known risk to change later, not a recommendation.
-select 'captured_direct_dml' as check_name, x.table_name as mismatch
+-- 8. Phase 5B direct register-write boundary: authenticated keeps read access
+-- but cannot bypass attendance_save_register with direct INSERT/UPDATE/DELETE.
+select 'register_write_boundary' as check_name, x.table_name as mismatch
 from (values
   ('attendance.daily_registers'::text),
   ('attendance.attendance_records'::text)
 ) x(table_name)
-where not (
-  has_table_privilege('authenticated', x.table_name, 'SELECT')
-  and has_table_privilege('authenticated', x.table_name, 'INSERT')
-  and has_table_privilege('authenticated', x.table_name, 'UPDATE')
-  and has_table_privilege('authenticated', x.table_name, 'DELETE')
-);
+where not has_table_privilege('authenticated', x.table_name, 'SELECT')
+   or has_table_privilege('authenticated', x.table_name, 'INSERT')
+   or has_table_privilege('authenticated', x.table_name, 'UPDATE')
+   or has_table_privilege('authenticated', x.table_name, 'DELETE');
 
 -- 9. Exact non-sensitive reference-code sets
 with expected(code) as (

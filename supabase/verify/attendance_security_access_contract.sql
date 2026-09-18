@@ -24,8 +24,8 @@ with actual as (
 select 'public_rpc_security_mode_inventory' as check_name, to_jsonb(actual) as mismatch
 from actual
 where total <> 21
-   or security_definer <> 14
-   or security_invoker <> 7;
+   or security_definer <> 15
+   or security_invoker <> 6;
 
 -- 2. Public/anon/authenticated EXECUTE boundary.
 with f as (
@@ -100,6 +100,8 @@ with required(proname,marker) as (
     ('attendance_class_report_options','attendance.can_access_class'),
     ('attendance_monthly_class_stats_v2','auth.uid()'),
     ('attendance_monthly_class_stats_v2','attendance.can_access_class'),
+    ('attendance_save_register','auth.uid()'),
+    ('attendance_save_register','attendance.can_access_class'),
     ('attendance_submit_teacher_request','auth.uid()'),
     ('attendance_teacher_status','auth.uid()'),
     ('attendance_admin_school_dashboard','attendance_admin_school_dashboard_v2'),
@@ -139,10 +141,8 @@ where position('SECURITY DEFINER' in def)=0
 with expected(table_name,can_insert,can_update,can_delete) as (
   values
     ('academic_years',true,true,true),
-    ('attendance_records',true,true,true),
     ('calendar_dates',true,true,true),
     ('classes',true,true,true),
-    ('daily_registers',true,true,true),
     ('enrolments',true,true,true),
     ('schools',false,true,false),
     ('settings',true,true,true),
@@ -275,6 +275,26 @@ begin
 
   v_blocked := false;
   begin
+    perform public.attendance_save_register(
+      '00000000-0000-0000-0000-000000000004'::uuid,
+      date '2026-04-01',
+      '[]'::jsonb,
+      null
+    );
+  exception
+    when others then
+      if position('You do not have access to this class' in sqlerrm)>0 then
+        v_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+  if not v_blocked then
+    raise exception 'Outsider unexpectedly saved assigned-class register';
+  end if;
+
+  v_blocked := false;
+  begin
     perform public.attendance_admin_student_roster(
       '00000000-0000-0000-0000-000000000001'::uuid
     );
@@ -350,14 +370,16 @@ end
 $phase5a$;
 rollback;
 
--- 12. Current risk is real, not theoretical: an assigned teacher can write
--- directly to register/record tables under existing grants+RLS. Roll back all rows.
+-- 12. Phase 5B closes direct authenticated register/record DML.
+-- Exercise all three write verbs on both tables as the assigned teacher.
 begin;
 set local role authenticated;
-do $phase5a$
+do $phase5b$
 declare
   v_register_id uuid;
   v_enrolment_id uuid;
+  v_record_id uuid;
+  v_blocked boolean;
 begin
   perform set_config(
     'request.jwt.claim.sub',
@@ -365,54 +387,161 @@ begin
     true
   );
 
-  insert into attendance.daily_registers(
-    class_id, attendance_date, status, started_by, updated_by
-  ) values (
-    '00000000-0000-0000-0000-000000000004'::uuid,
-    date '2026-04-01',
-    'draft',
-    '00000000-0000-0000-0000-000000000100'::uuid,
-    '00000000-0000-0000-0000-000000000100'::uuid
-  ) returning id into v_register_id;
-
-  select id into v_enrolment_id
-  from attendance.enrolments
+  select id into v_register_id
+  from attendance.daily_registers
   where class_id='00000000-0000-0000-0000-000000000004'::uuid
-  order by roster_order
+    and attendance_date=date '2026-02-02';
+
+  select ar.id, ar.enrolment_id
+    into v_record_id, v_enrolment_id
+  from attendance.attendance_records ar
+  where ar.daily_register_id=v_register_id
+  order by ar.id
   limit 1;
 
-  insert into attendance.attendance_records(
-    daily_register_id, enrolment_id, status_code, source, created_by, updated_by
-  ) values (
-    v_register_id,
-    v_enrolment_id,
-    'P',
-    'web',
-    '00000000-0000-0000-0000-000000000100'::uuid,
-    '00000000-0000-0000-0000-000000000100'::uuid
-  );
+  v_blocked := false;
+  begin
+    insert into attendance.daily_registers(
+      class_id, attendance_date, status, started_by, updated_by
+    ) values (
+      '00000000-0000-0000-0000-000000000004'::uuid,
+      date '2026-04-01',
+      'draft',
+      '00000000-0000-0000-0000-000000000100'::uuid,
+      '00000000-0000-0000-0000-000000000100'::uuid
+    );
+  exception when insufficient_privilege then v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'Direct authenticated daily_registers INSERT was not blocked';
+  end if;
 
-  if v_register_id is null then
-    raise exception 'Direct DML baseline exposure was not exercised';
+  v_blocked := false;
+  begin
+    update attendance.daily_registers
+    set status=status
+    where id=v_register_id;
+  exception when insufficient_privilege then v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'Direct authenticated daily_registers UPDATE was not blocked';
+  end if;
+
+  v_blocked := false;
+  begin
+    delete from attendance.daily_registers where id=v_register_id;
+  exception when insufficient_privilege then v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'Direct authenticated daily_registers DELETE was not blocked';
+  end if;
+
+  v_blocked := false;
+  begin
+    insert into attendance.attendance_records(
+      daily_register_id, enrolment_id, status_code, source
+    ) values (
+      v_register_id, v_enrolment_id, 'P', 'web'
+    );
+  exception when insufficient_privilege then v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'Direct authenticated attendance_records INSERT was not blocked';
+  end if;
+
+  v_blocked := false;
+  begin
+    update attendance.attendance_records
+    set status_code=status_code
+    where id=v_record_id;
+  exception when insufficient_privilege then v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'Direct authenticated attendance_records UPDATE was not blocked';
+  end if;
+
+  v_blocked := false;
+  begin
+    delete from attendance.attendance_records where id=v_record_id;
+  exception when insufficient_privilege then v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'Direct authenticated attendance_records DELETE was not blocked';
   end if;
 end
-$phase5a$;
+$phase5b$;
 rollback;
 
--- 13. The controlled save-register RPC also succeeds for the assigned teacher.
--- This protects the dependency that Phase 5B must preserve before revoking DML.
+-- 13. The controlled RPC remains the complete write path for an assigned teacher.
+-- Exercise validation, first save, no-change save, one-pupil correction and audit.
 begin;
 set local role authenticated;
-do $phase5a$
+do $phase5b$
 declare
   v_records jsonb;
+  v_corrected_records jsonb;
   v_result jsonb;
+  v_first_enrolment uuid;
+  v_register attendance.daily_registers%rowtype;
+  v_present_count integer;
+  v_absent_count integer;
+  v_blocked boolean;
 begin
   perform set_config(
     'request.jwt.claim.sub',
     '00000000-0000-0000-0000-000000000100',
     true
   );
+
+  v_blocked := false;
+  begin
+    perform public.attendance_save_register(
+      '00000000-0000-0000-0000-000000000004'::uuid,
+      date '2026-04-01',
+      '[]'::jsonb,
+      null
+    );
+  exception
+    when others then
+      if position('Expected 25 attendance records but received 0' in sqlerrm)>0 then
+        v_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+  if not v_blocked then
+    raise exception 'Complete-roster rejection was not preserved';
+  end if;
+
+  v_blocked := false;
+  begin
+    perform public.attendance_save_register(
+      '00000000-0000-0000-0000-000000000004'::uuid,
+      date '2026-04-02',
+      '[]'::jsonb,
+      null
+    );
+  exception
+    when others then
+      if position('Attendance cannot be saved for a non-school day' in sqlerrm)>0 then
+        v_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+  if not v_blocked then
+    raise exception 'Non-school-day rejection was not preserved';
+  end if;
+
+  select e.id into v_first_enrolment
+  from attendance.enrolments e
+  join attendance.students s on s.id=e.student_id
+  where e.class_id='00000000-0000-0000-0000-000000000004'::uuid
+    and e.active and s.active
+    and e.start_date <= date '2026-04-01'
+    and (e.end_date is null or e.end_date >= date '2026-04-01')
+  order by e.roster_order
+  limit 1;
 
   select jsonb_agg(
     jsonb_build_object(
@@ -439,12 +568,130 @@ begin
   ) into v_result;
 
   if coalesce((v_result->>'ok')::boolean,false) is not true
+     or coalesce((v_result->>'no_changes')::boolean,true) is not false
+     or coalesce((v_result->>'correction')::boolean,true) is not false
      or (v_result->>'recorded')::int <> 25
-     or coalesce((v_result->>'no_changes')::boolean,true) is not false then
-    raise exception 'Controlled attendance_save_register baseline failed: %', v_result;
+     or (v_result->>'changed_records')::int <> 25
+     or (v_result->>'correction_count')::int <> 0 then
+    raise exception 'Controlled first-save contract failed: %', v_result;
+  end if;
+
+  select public.attendance_save_register(
+    '00000000-0000-0000-0000-000000000004'::uuid,
+    date '2026-04-01',
+    v_records,
+    null
+  ) into v_result;
+
+  if coalesce((v_result->>'ok')::boolean,false) is not true
+     or coalesce((v_result->>'no_changes')::boolean,false) is not true
+     or (v_result->>'changed_records')::int <> 0
+     or (v_result->>'correction_count')::int <> 0 then
+    raise exception 'Controlled no-change save contract failed: %', v_result;
+  end if;
+
+  select jsonb_agg(
+    jsonb_build_object(
+      'enrolment_id',e.id,
+      'status_code',case when e.id=v_first_enrolment then 'A' else 'P' end,
+      'reason_code',case when e.id=v_first_enrolment then 'MEDICAL' else null end,
+      'note',null
+    )
+    order by e.roster_order
+  )
+  into v_corrected_records
+  from attendance.enrolments e
+  join attendance.students s on s.id=e.student_id
+  where e.class_id='00000000-0000-0000-0000-000000000004'::uuid
+    and e.active and s.active
+    and e.start_date <= date '2026-04-01'
+    and (e.end_date is null or e.end_date >= date '2026-04-01');
+
+  select public.attendance_save_register(
+    '00000000-0000-0000-0000-000000000004'::uuid,
+    date '2026-04-01',
+    v_corrected_records,
+    'Phase 5B synthetic correction'
+  ) into v_result;
+
+  if coalesce((v_result->>'ok')::boolean,false) is not true
+     or coalesce((v_result->>'no_changes')::boolean,true) is not false
+     or coalesce((v_result->>'correction')::boolean,false) is not true
+     or (v_result->>'changed_records')::int <> 1
+     or (v_result->>'correction_count')::int <> 1
+     or coalesce(v_result->>'change_batch_id','') = '' then
+    raise exception 'Controlled correction contract failed: %', v_result;
+  end if;
+
+  select * into v_register
+  from attendance.daily_registers
+  where class_id='00000000-0000-0000-0000-000000000004'::uuid
+    and attendance_date=date '2026-04-01';
+
+  if v_register.correction_count <> 1
+     or v_register.last_correction_reason <> 'Phase 5B synthetic correction'
+     or v_register.started_by <> '00000000-0000-0000-0000-000000000100'::uuid
+     or v_register.submitted_by <> '00000000-0000-0000-0000-000000000100'::uuid
+     or v_register.updated_by <> '00000000-0000-0000-0000-000000000100'::uuid
+     or v_register.last_corrected_by <> '00000000-0000-0000-0000-000000000100'::uuid then
+    raise exception 'Register correction metadata/actor contract failed';
+  end if;
+
+  select
+    count(*) filter(where ar.status_code='P'),
+    count(*) filter(where ar.status_code='A' and ar.reason_code='MEDICAL')
+  into v_present_count, v_absent_count
+  from attendance.attendance_records ar
+  where ar.daily_register_id=v_register.id;
+
+  if v_present_count <> 24 or v_absent_count <> 1 then
+    raise exception 'Correction changed untouched pupil statuses unexpectedly';
   end if;
 end
-$phase5a$;
+$phase5b$;
+
+reset role;
+
+do $phase5b_audit$
+declare
+  v_register_id uuid;
+  v_insert_count integer;
+  v_update_count integer;
+  v_bad_actor integer;
+  v_bad_batch integer;
+  v_bad_reason integer;
+begin
+  select id into v_register_id
+  from attendance.daily_registers
+  where class_id='00000000-0000-0000-0000-000000000004'::uuid
+    and attendance_date=date '2026-04-01';
+
+  select
+    count(*) filter(where a.action='INSERT'),
+    count(*) filter(where a.action='UPDATE'),
+    count(*) filter(where a.changed_by is distinct from '00000000-0000-0000-0000-000000000100'::uuid),
+    count(*) filter(where a.change_batch_id is null),
+    count(*) filter(
+      where a.action='UPDATE'
+        and a.correction_reason is distinct from 'Phase 5B synthetic correction'
+    )
+  into v_insert_count, v_update_count, v_bad_actor, v_bad_batch, v_bad_reason
+  from attendance_private.attendance_record_audit a
+  join attendance.attendance_records ar on ar.id=a.attendance_record_id
+  where ar.daily_register_id=v_register_id;
+
+  if v_insert_count <> 25
+     or v_update_count <> 1
+     or v_bad_actor <> 0
+     or v_bad_batch <> 0
+     or v_bad_reason <> 0 then
+    raise exception
+      'Correction audit contract failed inserts=% updates=% bad_actor=% bad_batch=% bad_reason=%',
+      v_insert_count, v_update_count, v_bad_actor, v_bad_batch, v_bad_reason;
+  end if;
+end
+$phase5b_audit$;
+
 rollback;
 
 -- 14. Assigned teacher cannot use the admin movement RPC; admin can.
