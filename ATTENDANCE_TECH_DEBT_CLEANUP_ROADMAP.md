@@ -233,7 +233,7 @@ Actions:
 **Exit:** one calculation model drives all reporting surfaces, and the requested reporting population is explicit and mathematically consistent across all outputs.
 
 ### Phase 5 — Security and access cleanup
-**Status:** Phase 5A, Phase 5B, and Phase 5C are complete in repository and production. Phase 5C repository/live reconciliation merged via PR #70 as signed `main` `153f2d4830cba7750956ba020e3a99709d0f2722`. Phase 5D Teacher Management Write Boundary is now in repository/local implementation only on `cleanup/phase-5d-teacher-management-write-boundary`; production remains on verified v15 and v16 is not applied.
+**Status:** Phase 5A, Phase 5B, and Phase 5C are complete in repository and production. Phase 5D Teacher Management Write Boundary is implemented and locally validated on PR #71 from signed `main` `153f2d4830cba7750956ba020e3a99709d0f2722`; merge remains pending explicit approval. Production remains on verified v15 and v16 is not applied.
 **Goal:** Make the trust boundary explicit and minimal.
 
 Fresh Phase 5 impact-map findings:
@@ -422,7 +422,7 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 5D repository/local implementation is in progress from exact signed base `main` `153f2d4830cba7750956ba020e3a99709d0f2722`. Candidate v16 source is `supabase/migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql`. It changes only authenticated write grants on `teacher_school_memberships` and `teacher_class_assignments` in repository/local validation; existing teacher RPC bodies/modes, frontend/DOM/Auth/Science/Netlify, and production Supabase remain unchanged.
+**Current checkpoint:** Phase 5D repository/local implementation is complete on PR #71. Initial exact validated head `365beae2e69960f8880e5e8a5b77a6905843d779` passed all five required gates, including the new rollback-only teacher-management verifier. Candidate v16 source remains `supabase/migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql`; it changes only authenticated write grants on `teacher_school_memberships` and `teacher_class_assignments`. Existing teacher RPC bodies/modes, frontend/DOM/Auth/Science/Netlify, and production Supabase remain unchanged.
 
 - PR #66 reconciliation base was signed `main` `74d1858f84a5ba88504a42dd90320baabee26b53`; approved exact head `49ea709896dfea3b53521cd3f6cdfe367568d7d0` changed source/metadata only and merged as `a344514a7a7f99175a74e8f718fb64c898a93bb1`.
 - Reconciled repository v14 source is `supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql`; its SQL content remains the exact reviewed blob `7659c0f3595237bbc8e7d6522cf83a28d6e19e49`.
@@ -447,11 +447,14 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 **Planned v16 rollback if production application is later approved and regresses:** restore authenticated INSERT/UPDATE/DELETE on `attendance.teacher_school_memberships` and `attendance.teacher_class_assignments`, then rerun the teacher-management verifier, security/access contract, bootstrap/status checks, and full regression suite. V16 changes no rows and no function bodies, so rollback is grant restoration only.
 
-**Next action:** complete Phase 5D repository/local validation only. Run the exact branch through Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, Phase 5A security validation, and the new teacher-management v16 verifier; review the exact diff and stop before merge or any production v16 application. Production application requires a separate explicit approval after merge. Do not start Phase 5E/5F automatically.
+**Next action:** STOP at the Phase 5D repository/local merge gate. This roadmap-only seal creates a new exact PR head, so Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, and Phase 5A security validation must all remain green on that final head. Merge PR #71 only after explicit approval. Do not apply v16 to production; production application requires a separate explicit approval after merge. Do not start Phase 5E/5F automatically.
 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **19 Sep 2026:** Phase 5D initial validated implementation head `365beae2e69960f8880e5e8a5b77a6905843d779` passed all five required repository/local gates: Phase 0A `35401407800`, Phase 0B `35401407786`, Playwright `35401407777` with 60/60 Chromium tests in 26.6s, Phase 4B1V Local DB Validation `35401407798`, and Phase 5A Security Access Validation `35401407791`. Both isolated DB workflows applied local migration `20260919090000`; `attendance_contract.sql`, protected reporting population/equivalence/public-API checks, `attendance_security_access_contract.sql`, the v15 movement verifier, and the new `attendance_teacher_management_v16_contract.sql` all passed. Earlier CI exposed two verifier-only fixture/privilege assumptions (direct authenticated signup-request inspection and dependence on Phase 5A identities in Phase 4B1V); both were corrected without changing v16 runtime SQL or weakening assertions. This roadmap-only seal creates a new PR head requiring the same five exact-head gates before merge approval. Production remains on v15 and no live mutation occurred.
+
 
 - **19 Sep 2026:** Phase 5D repository/local implementation started from exact signed `main` `153f2d4830cba7750956ba020e3a99709d0f2722` after explicit approval. Fresh impact mapping confirmed `teacher_school_memberships` and `teacher_class_assignments` still expose authenticated INSERT/UPDATE/DELETE while the cleanup frontend remains RPC-only. The only public writers are existing authenticated-only `SECURITY DEFINER` RPCs `attendance_admin_review_teacher_request` and `attendance_admin_set_teacher_active`; their live bodies match repository source, so candidate v16 `20260919090000_attendance_v16_teacher_management_write_boundary.sql` is grant-only and does not rewrite functions. The rollback-only `attendance_teacher_management_v16_contract.sql` proves direct admin DML blocking, non-admin rejection, authorized approval, coordinated disable/enable, private audit semantics, generic-`teacher` Phase 5E compatibility, teacher status, and invoker bootstrap reads. No production Supabase/Auth/Science/data/frontend/Netlify mutation has occurred; production remains on v15.
 
