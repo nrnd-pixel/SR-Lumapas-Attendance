@@ -233,7 +233,7 @@ Actions:
 **Exit:** one calculation model drives all reporting surfaces, and the requested reporting population is explicit and mathematically consistent across all outputs.
 
 ### Phase 5 — Security and access cleanup
-**Status:** Phase 5A and Phase 5B Attendance Register Write Boundary are complete in repository and production. Production v14 is verified live; the Phase 5B repository/live migration-ledger reconciliation is implemented in the current source-only checkpoint and pending exact-head verification/merge before Phase 5C.
+**Status:** Phase 5A and Phase 5B Attendance Register Write Boundary are complete in repository and production. Production v14 is verified live; the Phase 5B repository/live migration-ledger reconciliation is implemented on PR #66. Merge remains pending explicit approval, and every merge candidate must retain all five exact-head gates green before Phase 5C.
 **Goal:** Make the trust boundary explicit and minimal.
 
 Fresh Phase 5 impact-map findings:
@@ -414,7 +414,7 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 5B production application is complete and verified. Repository/live v14 migration-ledger reconciliation is implemented in this source-only checkpoint and pending exact-head verification/merge. The live v0.7 frontend remains unchanged; Phase 5C has not started.
+**Current checkpoint:** Phase 5B production application is complete and verified. Repository/live v14 migration-ledger reconciliation is implemented on PR #66; merge remains pending explicit approval. The live v0.7 frontend remains unchanged; Phase 5C has not started.
 
 - Exact signed reconciliation base `main`: `74d1858f84a5ba88504a42dd90320baabee26b53`; tree `9b296318e19a3781b92fbf659632bb1b83386042`; GitHub signature valid. The reconciliation branch changes source/metadata only.
 - Reconciled repository v14 source is `supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql`; its SQL content remains the exact reviewed blob `7659c0f3595237bbc8e7d6522cf83a28d6e19e49`.
@@ -432,11 +432,13 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 **Rollback remains available if a later production regression is discovered:** in one transaction, restore authenticated INSERT/UPDATE/DELETE on the two register tables and return `attendance_save_register(uuid,date,jsonb,text)` to `SECURITY INVOKER`, then rerun the frozen pre-v14 fingerprint checks. No data rollback is required by v14 itself because the migration transformed no data.
 
-**Next action:** run the Phase 5B reconciliation exact-head gates — Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, and Phase 5A security validation — review the diff, then stop for explicit merge approval. Do not apply/reapply v14 and do not start Phase 5C automatically.
+**Next action:** STOP at the Phase 5B reconciliation merge gate. Merge PR #66 only after the current exact head has Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, and Phase 5A security validation green and the user explicitly approves merge. Do not apply/reapply v14 and do not start Phase 5C automatically.
 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **18 Sep 2026:** Phase 5B production-reconciliation PR #66 initial exact head `ed094fc1230d9fe4a5a469f048f2abb0a7867ebf` passed all five required gates: Phase 0A `35336713850`, Phase 0B `35336713833`, Playwright `35336713824` (60/60 Chromium tests in 25.9s), Phase 4B1V Local DB Validation `35336713871`, and Phase 5A Security Access Validation `35336713874`. Full seven-file diff review found only the intended workflow/reference metadata changes plus a zero-content-change migration rename; there were no PR comments, reviews, or threads. This roadmap-only seal update creates a new PR head, so the same five gates remain mandatory on that current head before merge approval. No Supabase/Auth/Science/data/frontend/Netlify/deployment mutation was made.
 
 - **18 Sep 2026:** Phase 5B production-reconciliation source checkpoint implemented from signed `main` `74d1858f84a5ba88504a42dd90320baabee26b53`. Repository v14 is renamed from `20260918082500_attendance_v14_register_write_boundary.sql` to live ledger version `20260918094529_attendance_v14_register_write_boundary.sql` with the exact same SQL blob `7659c0f3595237bbc8e7d6522cf83a28d6e19e49`; Phase 0B/Phase 4B1V/Phase 5A workflow references, backend README, sanitized production migration history, and current roadmap state are reconciled. This checkpoint is source-only: it does not apply/reapply v14, mutate Supabase/Auth/Science/data, change frontend runtime/DOM, or deploy v1.0. Exact-head five-gate verification and explicit merge approval remain required; Phase 5C is not started.
 
