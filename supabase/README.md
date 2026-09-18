@@ -157,6 +157,37 @@ register-record-audit baseline remained unchanged with zero corrections, and all
 four protected Whole-Class/Non-SEN reporting fixtures remained exact. This
 repository reconciliation must not apply or reapply v14 to production.
 
+
+## Phase 5C student movement write boundary — repository/local candidate
+
+`migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql`
+is the repository/local Phase 5C candidate. It is **not applied to production**.
+
+The migration preserves the existing public Transfer In / Transfer Out / Move Class
+function signatures and JSON return shapes while moving their writes behind a
+controlled `SECURITY DEFINER` boundary. Transfer In keeps its existing body and
+authorization order. Transfer Out and Move Class add an explicit active-admin
+membership guard before privileged enrolment access, then constrain the target
+enrolment to a school for which the caller is an active administrator.
+
+After v15 in an isolated/local database, `authenticated` retains SELECT on
+`attendance.students`, `attendance.enrolments`, and
+`attendance.student_movements` but has no direct INSERT/UPDATE/DELETE on those
+tables. Existing RLS policies remain in place as defense in depth, and
+`service_role` privileges are unchanged.
+
+`verify/attendance_student_movement_v15_contract.sql` is rollback-only and proves:
+direct admin DML is blocked; assigned teachers and unaffiliated authenticated
+callers cannot use any of the three movement RPCs; authorized Transfer In writes
+student/enrolment/movement state atomically; Transfer Out preserves existing
+attendance records; and Move Class preserves old-class attendance while creating
+the new eligibility boundary and movement history.
+
+The standard Phase 0B, Phase 4B1V, and Phase 5A workflows reconstruct v15 only in
+isolated CI/local Supabase stacks. Production migration history must not be updated,
+and v15 must not be applied to live Supabase, until a separate production-application
+checkpoint is explicitly approved.
+
 ## Known captured risks — preserved, not fixed here
 
 Phase 0B records the existing live design exactly; Phase 4B1 reporting work does
