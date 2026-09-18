@@ -134,15 +134,39 @@ Supabase's current Data API guidance recommends unique function names rather tha
 overloading API-exposed database functions, so Phase 4B1 uses `*_v2` names instead
 of new overloads of the three legacy RPC names.
 
+## Phase 5B register write boundary and production reconciliation
+
+`migrations/20260918094529_attendance_v14_register_write_boundary.sql` is the
+repository source for the Phase 5B register-write hardening. Its SQL bytes are
+identical to the reviewed source originally committed as version `20260918082500`;
+this reconciliation changes the repository migration version only so it matches
+the live Supabase migration ledger.
+
+The approved production application was recorded by Supabase as
+`20260918094529 attendance_v14_register_write_boundary`. The migration changes
+`public.attendance_save_register(uuid,date,jsonb,text)` to `SECURITY DEFINER`
+without rewriting its body, and revokes authenticated INSERT/UPDATE/DELETE on
+`attendance.daily_registers` and `attendance.attendance_records` while
+retaining authenticated SELECT, service-role CRUD, existing RLS policies, and
+actor/audit triggers.
+
+Post-application verification proved the save-register body/ACL/search-path
+fingerprint unchanged, unauthorized callers blocked, an assigned teacher's
+existing-register replay returned a no-change result, the 137 / 3,425 / 3,425
+register-record-audit baseline remained unchanged with zero corrections, and all
+four protected Whole-Class/Non-SEN reporting fixtures remained exact. This
+repository reconciliation must not apply or reapply v14 to production.
+
 ## Known captured risks — preserved, not fixed here
 
 Phase 0B records the existing live design exactly; Phase 4B1 reporting work does
 not broaden into Phase 5 security redesign.
 
-- `authenticated` currently has direct DML on `attendance.daily_registers` and
-  `attendance.attendance_records` subject to class-scoped RLS. This can bypass
-  `attendance_save_register` business safeguards inside an authorized class.
-  Review/revoke only in the later security phase with regression coverage.
+- Phase 5B production v14 has closed authenticated INSERT/UPDATE/DELETE on
+  `attendance.daily_registers` and `attendance.attendance_records`; authenticated
+  SELECT remains and writes flow through the controlled `attendance_save_register`
+  RPC. Direct authenticated writes still remain on other Attendance admin tables
+  and are handled separately by Phase 5C-5F.
 - Signup/approval distinguishes `class_teacher` and `assistant_teacher`, while
   active class assignment authorization currently collapses to generic
   `teacher`/`viewer` roles.

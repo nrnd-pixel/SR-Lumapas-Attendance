@@ -23,7 +23,7 @@ jobs:
           import sys
 
           v13_path = "supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql"
-          v14_path = "supabase/migrations/20260918082500_attendance_v14_register_write_boundary.sql"
+          v14_path = "supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           required = [
