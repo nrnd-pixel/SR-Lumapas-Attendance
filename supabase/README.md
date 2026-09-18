@@ -158,10 +158,10 @@ four protected Whole-Class/Non-SEN reporting fixtures remained exact. This
 repository reconciliation must not apply or reapply v14 to production.
 
 
-## Phase 5C student movement write boundary — merged repository candidate
+## Phase 5C student movement write boundary and production reconciliation
 
-`migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql`
-is the merged repository Phase 5C source from PR #68. It is **not applied to production**; live Supabase remains on v14 until a separate production-application checkpoint is explicitly approved.
+`migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql`
+is the reconciled repository source for the Phase 5C student-movement hardening. Its SQL bytes are identical to the reviewed source originally committed as version `20260918131500`; this reconciliation changes the repository migration version only so it matches the live Supabase migration ledger. The exact SQL blob remains `b3c1c2b904558d1d0fb867f5e71feb2506ceec76`.
 
 The migration preserves the existing public Transfer In / Transfer Out / Move Class
 function signatures and JSON return shapes while moving their writes behind a
@@ -186,9 +186,22 @@ the new eligibility boundary and movement history.
 The standard Phase 0B, Phase 4B1V, and Phase 5A workflows reconstruct v15 only in
 isolated CI/local Supabase stacks. PR #68 final head
 `a2b8da0f4e7eaf49cbc74194e1bbff2d85a851b0` passed all five required gates before
-merging as `main` `73ea8383ebb95872eafa92a4932b176987ba1ab0`. Production migration history must
-not be updated, and v15 must not be applied to live Supabase, until a separate
-production-application checkpoint is explicitly approved.
+merging. Production application was separately approved and Supabase recorded live
+migration `20260918144321 attendance_v15_student_movement_write_boundary`.
+
+Post-application verification confirmed all three movement RPCs are now controlled
+`SECURITY DEFINER` functions with fixed empty `search_path`, authenticated/service-role
+EXECUTE retained, and no `anon`/`PUBLIC` EXECUTE. Authenticated access to `students`,
+`enrolments`, and `student_movements` is now SELECT-only while service-role privileges,
+RLS, policies, and existing triggers remain unchanged. Rollback-only live smoke tests
+proved direct authenticated DML is blocked; teacher/outsider movement calls are rejected;
+and authorized Transfer In, Transfer Out, and Move Class still work through the RPC
+boundary. Production data stayed at 319 active pupils, 319 current enrolments, 137
+registers, 3,425 attendance rows, 3,425 audit rows, zero movements/corrections, and all
+four protected Whole-Class/Non-SEN reporting fixtures remained exact. Security Advisor
+added only the expected three authenticated-`SECURITY DEFINER` warnings for the movement
+RPCs, with no new anonymous Attendance exposure. This repository reconciliation must
+not apply or reapply v15 to production.
 
 ## Known captured risks — preserved, not fixed here
 
