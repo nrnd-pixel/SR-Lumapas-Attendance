@@ -35,6 +35,7 @@ jobs:
           test -f assets/js/statistics.js
           test -f assets/js/admin-dashboard.js
           test -f assets/js/period-reports.js
+          test -f assets/js/reporting-population.js
           test -f assets/js/app-bootstrap.js
           test -f assets/js/app-navigation.js
           test -f netlify.toml
@@ -1042,14 +1043,15 @@ jobs:
               if after != before:
                   raise SystemExit(f"Historical Phase 3B7F1 changed {path}")
 
-      - name: Verify exact Phase 3B7F2 app-navigation split
+      - name: Verify historical Phase 3B7F2 app-navigation split
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
 
           phase3b7f2_base = "cf939c3582d4db2c2be7a503b4355cfd9066af55"
-          subprocess.run(["git", "cat-file", "-e", f"{phase3b7f2_base}^{{commit}}"], check=True)
+          phase3b7f2_sha = "cb131514a7b90b81d52882455281a25de6b3609f"
+          for sha in (phase3b7f2_base, phase3b7f2_sha):
+              subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=True)
           before_main = subprocess.check_output(["git", "show", f"{phase3b7f2_base}:assets/js/main.js"], text=True)
 
           bootstrap_import = "import { initAppBootstrap, enterApp, schoolId, adminClasses, showAdminMsg } from './app-bootstrap.js';\n"
@@ -1071,9 +1073,9 @@ jobs:
           navigation_end = expected_main.index(listener_marker, navigation_start)
           expected_main = expected_main[:navigation_start] + "\n" + expected_main[navigation_end:]
 
-          current_main = Path("assets/js/main.js").read_text(encoding="utf-8")
-          if current_main != expected_main:
-              raise SystemExit("assets/js/main.js contains changes beyond the exact Phase 3B7F2 app-navigation extraction")
+          historical_main = subprocess.check_output(["git", "show", f"{phase3b7f2_sha}:assets/js/main.js"], text=True)
+          if historical_main != expected_main:
+              raise SystemExit("Historical Phase 3B7F2 main.js is not the exact approved app-navigation extraction")
 
           navigation_exports = navigation_block
           navigation_exports = navigation_exports.replace("function switchPanel", "export function switchPanel", 1)
@@ -1087,9 +1089,9 @@ jobs:
               "import { loadAdminTeachers } from './teacher-admin.js';\n\n"
               + navigation_exports + "\n"
           )
-          current_navigation = Path("assets/js/app-navigation.js").read_text(encoding="utf-8")
-          if current_navigation != expected_navigation:
-              raise SystemExit("assets/js/app-navigation.js is not the exact approved Phase 3B7F2 module")
+          historical_navigation = subprocess.check_output(["git", "show", f"{phase3b7f2_sha}:assets/js/app-navigation.js"], text=True)
+          if historical_navigation != expected_navigation:
+              raise SystemExit("Historical Phase 3B7F2 app-navigation.js is not the exact approved module")
 
           for path in (
               "index.html",
@@ -1108,10 +1110,10 @@ jobs:
               "assets/js/app-bootstrap.js",
               "netlify.toml",
           ):
-              historical = subprocess.check_output(["git", "show", f"{phase3b7f2_base}:{path}"], text=True)
-              current = Path(path).read_text(encoding="utf-8")
-              if current != historical:
-                  raise SystemExit(f"Phase 3B7F2 must not change {path}")
+              before = subprocess.check_output(["git", "show", f"{phase3b7f2_base}:{path}"], text=True)
+              after = subprocess.check_output(["git", "show", f"{phase3b7f2_sha}:{path}"], text=True)
+              if after != before:
+                  raise SystemExit(f"Historical Phase 3B7F2 changed {path}")
 
       - name: Check current JavaScript syntax
         shell: bash
@@ -1130,5 +1132,6 @@ jobs:
           node --check assets/js/statistics.js
           node --check assets/js/admin-dashboard.js
           node --check assets/js/period-reports.js
+          node --check assets/js/reporting-population.js
           node --check assets/js/app-bootstrap.js
           node --check assets/js/app-navigation.js

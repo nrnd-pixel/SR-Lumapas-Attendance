@@ -1,6 +1,7 @@
 import { state, requestSerial, beginRequest, isLatestRequest } from './app-state.js';
 import { bruneiToday, displayDate, formatMonthLabel, shortDay } from './date-helpers.js';
 import { $, esc } from './ui-helpers.js';
+import { NON_SEN, reportingPopulation, reportingPopulationLabel } from './reporting-population.js';
 
 let sb;
 
@@ -12,7 +13,8 @@ function periodReportSelectionKey(){
     $('reportClassSelect').value,
     type,
     type==='term'?$('reportTermSelect').value:'',
-    type==='ytd'?$('reportAsOf').value:''
+    type==='ytd'?$('reportAsOf').value:'',
+    reportingPopulation('reportPopulation')
   ].join('|');
 }
 export function invalidatePeriodReport(){
@@ -44,29 +46,31 @@ export async function loadReportOptions(){
   sel.innerHTML=terms.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.term_name)+' · '+displayDate(t.start_date)+'–'+displayDate(t.end_date)+'</option>').join('');
   const today=bruneiToday(),current=terms.find(t=>today>=t.start_date&&today<=t.end_date)||terms[terms.length-1];
   if(current)sel.value=current.id;
-  syncReportTypeUI();setReportBanner('Choose Term or YTD, then load the report.','info');
+  syncReportTypeUI();setReportBanner('Choose Term or YTD, population, then load the report.','info');
   return true;
 }
 export async function loadPeriodReport(){
-  const classId=$('reportClassSelect').value,type=$('reportType').value;
+  const classId=$('reportClassSelect').value,type=$('reportType').value,population=reportingPopulation('reportPopulation');
   if(!classId)return;
   if(!state.reportOptions||state.reportOptions.class?.id!==classId){
     const optionsReady=await loadReportOptions();
-    if(!optionsReady||$('reportClassSelect').value!==classId||$('reportType').value!==type)return;
+    if(!optionsReady||$('reportClassSelect').value!==classId||$('reportType').value!==type||reportingPopulation('reportPopulation')!==population)return;
   }
   const termId=type==='term'?$('reportTermSelect').value:null;
   const asOfDate=type==='ytd'?$('reportAsOf').value:null;
   if(type==='term'&&!termId){setReportBanner('Choose a term.','warn');return;}
-  const selectionKey=[classId,type,termId||'',asOfDate||''].join('|');
+  const selectionKey=[classId,type,termId||'',asOfDate||'',population].join('|');
   const serial=beginRequest('periodReport');
-  $('loadReportBtn').disabled=true;$('exportReportBtn').disabled=true;setReportBanner('Loading report…','info');
+  $('loadReportBtn').disabled=true;$('exportReportBtn').disabled=true;setReportBanner('Loading '+reportingPopulationLabel(population)+' report…','info');
+  const rpcName=population===NON_SEN?'attendance_class_period_report_v2':'attendance_class_period_report';
   const args={p_class_id:classId,p_period_type:type,p_term_id:termId||null,p_as_of_date:asOfDate};
-  const {data,error}=await sb.rpc('attendance_class_period_report',args);
+  if(population===NON_SEN)args.p_population=population;
+  const {data,error}=await sb.rpc(rpcName,args);
   if(!isLatestRequest('periodReport',serial))return;
   if(periodReportSelectionKey()!==selectionKey){$('loadReportBtn').disabled=false;$('exportReportBtn').disabled=true;return;}
   $('loadReportBtn').disabled=false;
   if(error){state.periodReport=null;setReportBanner(error.message,'warn');renderPeriodReport();return;}
-  state.periodReport=data;renderPeriodReport();$('exportReportBtn').disabled=false;
+  state.periodReport=data?{...data,population:data.population||population}:data;renderPeriodReport();$('exportReportBtn').disabled=false;
 }
 function renderPeriodReport(){
   const data=state.periodReport,s=data?.summary||{},r=data?.roster||{},p=data?.period||{};
@@ -81,9 +85,10 @@ function renderPeriodReport(){
   const gb=$('reportGenderBanner');gb.classList.add('hidden');
   if(data&&!r.gender_complete){gb.textContent='Gender is missing for '+r.gender_unknown_pupils+' pupil'+(r.gender_unknown_pupils===1?'':'s')+'. Total attendance remains complete; male/female figures include known genders only.';gb.className='banner warn';gb.classList.remove('hidden');}
   if(data){
-    if(s.registers_missing>0)setReportBanner('Provisional: '+s.registers_missing+' elapsed register'+(s.registers_missing===1?' is':'s are')+' missing. Average and percentage use completed registers only.','warn');
-    else if(s.provisional)setReportBanner('Provisional report through '+displayDate(p.as_of_date)+'.','info');
-    else setReportBanner('Complete '+p.label+' report · '+s.school_days+' school days · '+s.possible_attendance+' possible pupil-attendances.','ok');
+    const populationText=reportingPopulationLabel(data.population)+' · ';
+    if(s.registers_missing>0)setReportBanner(populationText+'Provisional: '+s.registers_missing+' elapsed register'+(s.registers_missing===1?' is':'s are')+' missing. Average and percentage use completed registers only.','warn');
+    else if(s.provisional)setReportBanner(populationText+'Provisional report through '+displayDate(p.as_of_date)+'.','info');
+    else setReportBanner(populationText+'Complete '+p.label+' report · '+s.school_days+' school days · '+s.possible_attendance+' possible pupil-attendances.','ok');
   }
   const mb=$('reportMonthlyBody'),months=data?.months||[];
   mb.innerHTML=months.length?months.map(m=>'<tr class="'+(m.registers_missing?'missing-row':'')+'"><td>'+esc(formatMonthLabel(m.month))+'</td><td>'+m.registers_completed+'/'+(m.registers_completed+m.registers_missing)+'</td><td>'+m.cumulative_total+'</td><td>'+(m.average_attendance==null?'—':Number(m.average_attendance).toFixed(4))+'</td><td>'+(m.attendance_percentage==null?'—':Number(m.attendance_percentage).toFixed(2)+'%')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty-cell">Load a report to view monthly figures.</td></tr>';
@@ -93,11 +98,13 @@ function renderPeriodReport(){
 function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 export function exportPeriodReport(){
   const d=state.periodReport;if(!d)return;
-  const s=d.summary||{},p=d.period||{},c=d.class||{},r=d.roster||{};
+  const s=d.summary||{},p=d.period||{},c=d.class||{},r=d.roster||{},population=d.population||'whole_class';
   const rows=[
     ['SR Lumapas Main Attendance Report'],
     ['Class',c.class_code,c.class_name],
     ['Academic Year',c.year_no],
+    ['Reporting Population',reportingPopulationLabel(population)],
+    ['Population Key',population],
     ['Period',p.label],
     ['Start Date',p.start_date],['End Date',p.end_date],['As Of',p.as_of_date],
     ['Cumulative Attendance',s.cumulative_total],['Possible Attendance',s.possible_attendance],
@@ -116,6 +123,6 @@ export function exportPeriodReport(){
   ];
   const csv='\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  const safe=(c.class_code+'_'+p.label).replace(/[^A-Za-z0-9_-]+/g,'_');
+  const safe=(c.class_code+'_'+p.label+(population===NON_SEN?'_'+population:'')).replace(/[^A-Za-z0-9_-]+/g,'_');
   a.href=url;a.download='SRL_Attendance_'+safe+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
