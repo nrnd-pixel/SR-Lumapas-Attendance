@@ -23,6 +23,7 @@ jobs:
           import sys
 
           v13_path = "supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql"
+          v14_path = "supabase/migrations/20260918082500_attendance_v14_register_write_boundary.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           required = [
@@ -31,6 +32,7 @@ jobs:
               "supabase/baseline/attendance_v1_reference_data.sql",
               "supabase/baseline/production_migration_history.md",
               v13_path,
+              v14_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
               "supabase/verify/attendance_reporting_v13_equivalence.sql",
@@ -45,6 +47,7 @@ jobs:
           contract = Path("supabase/verify/attendance_contract.sql").read_text()
           reporting_fixtures = Path("supabase/verify/attendance_reporting_population_fixtures.sql").read_text()
           reporting_v13 = Path(v13_path).read_text()
+          register_v14 = Path(v14_path).read_text()
           reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
           phase5a_fixture = Path(phase5a_fixture_path).read_text()
           phase5a_security = Path(phase5a_security_path).read_text()
@@ -107,8 +110,13 @@ jobs:
               "internal_reporting_engine_execute",
               "Anonymous client: signup options succeeds",
               "Outsider unexpectedly authorized",
-              "Direct DML baseline exposure was not exercised",
-              "Controlled attendance_save_register baseline failed",
+              "Direct authenticated daily_registers INSERT was not blocked",
+              "Direct authenticated attendance_records DELETE was not blocked",
+              "Outsider unexpectedly saved assigned-class register",
+              "Complete-roster rejection was not preserved",
+              "Non-school-day rejection was not preserved",
+              "Controlled correction contract failed",
+              "Correction audit contract failed",
               "Authenticated client unexpectedly read private audit history",
           ]
           for marker in phase5a_security_markers:
@@ -311,6 +319,27 @@ jobs:
               if re.search(pattern, reporting_v13, re.I | re.S):
                   raise SystemExit("Phase 4B1 must use uniquely named *_v2 RPCs, not Data API overloads")
 
+          # Phase 5B migration: only execution mode + authenticated DML boundary.
+          # It must not rewrite the RPC body, alter tables/RLS, touch Science, or mutate data.
+          if re.search(r"(?i)\bscience\.", register_v14):
+              raise SystemExit("Phase 5B migration must not touch Science objects")
+          if re.search(r"(?im)^\s*(insert|update|delete|truncate|create|drop|alter\s+table|grant)\b", register_v14):
+              raise SystemExit("Phase 5B migration contains an out-of-scope statement")
+          normalized_v14 = " ".join(register_v14.lower().split())
+          v14_markers = [
+              "alter function public.attendance_save_register(uuid,date,jsonb,text) security definer",
+              "revoke insert, update, delete on attendance.daily_registers, attendance.attendance_records from authenticated",
+          ]
+          for marker in v14_markers:
+              if marker not in normalized_v14:
+                  raise SystemExit(f"Phase 5B migration marker missing: {marker}")
+          if register_v14.lower().count("alter function public.attendance_save_register") != 1:
+              raise SystemExit("Phase 5B must alter attendance_save_register exactly once")
+          if register_v14.lower().count("revoke insert, update, delete") != 1:
+              raise SystemExit("Phase 5B must contain exactly one authenticated DML revoke")
+          if "create or replace function" in register_v14.lower():
+              raise SystemExit("Phase 5B must not rewrite attendance_save_register body")
+
           contract_markers = [
               "attendance_admin_school_dashboard_v2",
               "attendance_class_period_report_v2",
@@ -318,6 +347,7 @@ jobs:
               "reporting_class_period_facts",
               "reporting_shared_engine_contract",
               "legacy_reporting_wrapper",
+              "register_write_boundary",
           ]
           for marker in contract_markers:
               if marker not in contract:
