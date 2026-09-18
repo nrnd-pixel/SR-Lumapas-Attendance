@@ -233,11 +233,11 @@ Actions:
 **Exit:** one calculation model drives all reporting surfaces, and the requested reporting population is explicit and mathematically consistent across all outputs.
 
 ### Phase 5 — Security and access cleanup
-**Status:** Phase 5A and Phase 5B Attendance Register Write Boundary are complete in repository and production. Production v14 is verified live, and the Phase 5B repository/live migration-ledger reconciliation is merged via PR #66 as signed `main` `a344514a7a7f99175a74e8f718fb64c898a93bb1`. Phase 5C has not started and requires a separate impact map and explicit approval before implementation.
+**Status:** Phase 5A and Phase 5B are complete in repository and production. Phase 5B documentation closure merged via PR #67 as signed `main` `a5aa82fc51703ef352caa5b694bab42700c1ba5c`. Phase 5C Student Movement Write Boundary is now in repository/local implementation only on `cleanup/phase-5c-student-movement-write-boundary`; production remains on verified v14 and v15 is not applied.
 **Goal:** Make the trust boundary explicit and minimal.
 
 Fresh Phase 5 impact-map findings:
-- Phase 5B reconciliation is merged to signed cleanup `main` `a344514a7a7f99175a74e8f718fb64c898a93bb1`; the next runtime/security checkpoint, Phase 5C, remains unstarted;
+- Phase 5B documentation closure is merged to signed cleanup `main` `a5aa82fc51703ef352caa5b694bab42700c1ba5c`; Phase 5C implementation started only after a fresh impact map and explicit repository/local approval;
 - cleanup frontend uses Attendance RPCs only and has no direct `.from(...)` table calls; its Supabase client uses the publishable key, not a service-role/secret key;
 - live Supabase has 21 public Attendance RPCs: 15 `SECURITY DEFINER` and 6 invoker-mode functions after Phase 5B; no Attendance function is executable by `PUBLIC`, and only `attendance_signup_options()` is executable by `anon`;
 - all 16 Attendance tables have RLS enabled with 50 policies. After Phase 5B, `authenticated` is SELECT-only on `daily_registers` / `attendance_records` and still has direct write grants on 11 residual Attendance admin tables;
@@ -414,7 +414,7 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 ## Current status
 
-**Current checkpoint:** Phase 5B production application and repository/live v14 migration-ledger reconciliation are complete and merged. PR #66 merged approved head `49ea709896dfea3b53521cd3f6cdfe367568d7d0` into signed cleanup `main` `a344514a7a7f99175a74e8f718fb64c898a93bb1`. The live v0.7 frontend remains unchanged; Phase 5C has not started.
+**Current checkpoint:** Phase 5C repository/local implementation is in progress from exact signed base `main` `a5aa82fc51703ef352caa5b694bab42700c1ba5c`. Candidate v15 source is `supabase/migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql`. It changes only the student-movement backend write boundary in repository/local validation; the live v0.7 frontend and production Supabase remain unchanged on v14.
 
 - PR #66 reconciliation base was signed `main` `74d1858f84a5ba88504a42dd90320baabee26b53`; approved exact head `49ea709896dfea3b53521cd3f6cdfe367568d7d0` changed source/metadata only and merged as `a344514a7a7f99175a74e8f718fb64c898a93bb1`.
 - Reconciled repository v14 source is `supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql`; its SQL content remains the exact reviewed blob `7659c0f3595237bbc8e7d6522cf83a28d6e19e49`.
@@ -428,15 +428,21 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 - All protected reporting fixtures remain exact after production v14: February Whole Class `398/425 = 0.9365 = 93.65%`; February Non-SEN `392/408 = 0.9608 = 96.08%`; Term 1 Whole Class `1051/1125 = 0.9342 = 93.42%`; Term 1 Non-SEN `1036/1080 = 0.9593 = 95.93%`.
 - No rollback was required. No frontend runtime/DOM, Auth setting, Science object, production Attendance row, Netlify/deployment, public default privilege, or Phase 5C change was made.
 - **Repository/live ledger reconciliation:** merged. Migration filename, reconstruction workflows, backend README, sanitized migration history, and this roadmap are aligned to live version `20260918094529` while preserving the exact v14 SQL bytes. The reconciliation did not apply/reapply v14.
-- Residual parent-table `ON DELETE CASCADE` history risk remains outside Phase 5B and is still assigned to later Phase 5C/5F work.
+- Phase 5C impact mapping quantified the movement-history risk: production currently has 319 students / 319 current enrolments / 0 student-movement rows; 25 enrolments already carry attendance history and have no movement-FK reference. Direct authenticated admin DML on students/enrolments can therefore bypass movement validation and reach attendance history through existing parent cascades.
+- The repository/local v15 candidate moves Transfer In / Transfer Out / Move Class behind controlled `SECURITY DEFINER` boundaries and revokes direct authenticated INSERT/UPDATE/DELETE on `students`, `enrolments`, and `student_movements` while retaining SELECT, existing RLS, and service-role privileges. Transfer Out / Move Class add an explicit active-admin guard before privileged enrolment access and constrain the enrolment to a school administered by the caller.
+- The dedicated rollback-only `attendance_student_movement_v15_contract.sql` verifies blocked direct DML, teacher/outsider rejection on all three movement RPCs, authorized Transfer In, Transfer Out attendance-history preservation, and Move Class old-history/new-eligibility semantics.
+- Structural-parent cascade risk through classes/academic years remains outside Phase 5C and is still assigned to later Phase 5F work.
 
 **Rollback remains available if a later production regression is discovered:** in one transaction, restore authenticated INSERT/UPDATE/DELETE on the two register tables and return `attendance_save_register(uuid,date,jsonb,text)` to `SECURITY INVOKER`, then rerun the frozen pre-v14 fingerprint checks. No data rollback is required by v14 itself because the migration transformed no data.
 
-**Next action:** STOP at the Phase 5B documentation-closure gate. This documentation-only checkpoint records PR #66's completed merge; it must retain Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, and Phase 5A security validation green on its exact head and still requires explicit approval before merge. Do not apply/reapply v14 and do not start Phase 5C automatically. After this documentation closure merges, Phase 5C requires a fresh impact map and separate explicit approval before implementation.
+**Next action:** complete Phase 5C repository/local validation only. Run the exact branch through Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, Phase 5A security validation, and the new movement verifier; review the exact diff and stop before merge or any production v15 application. Production application requires a separate explicit approval.
 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **18 Sep 2026:** Phase 5C repository/local implementation started from exact signed `main` `a5aa82fc51703ef352caa5b694bab42700c1ba5c` after explicit approval. Fresh read-only live impact mapping confirmed the three movement RPCs were still invoker-mode, authenticated direct DML remained on `students` / `enrolments` / `student_movements`, production held 319 students / 319 current enrolments / 0 movement rows, and 25 attendance-bearing enrolments lacked movement-FK protection. Candidate v15 `20260918131500_attendance_v15_student_movement_write_boundary.sql` and rollback-only movement verification are repository/local only; no Supabase/Auth/Science/data/frontend/Netlify/deployment mutation has occurred and production remains on v14.
+
 
 - **18 Sep 2026:** Phase 5B repository/live migration-ledger reconciliation completed. PR #66 approved exact head `49ea709896dfea3b53521cd3f6cdfe367568d7d0` retained all five gates green — Phase 0A `35343322044`, Phase 0B `35343322031`, Playwright `35343322023` (60/60 Chromium tests in 22.5s), Phase 4B1V Local DB Validation `35343322098`, and Phase 5A Security Access Validation `35343322026` — and was merged with the exact-head guard as `a344514a7a7f99175a74e8f718fb64c898a93bb1`. Post-merge compare confirmed `main` is identical to that merge commit and contains exactly the approved seven-file reconciliation diff, including the zero-content-change v14 migration rename. No Supabase/Auth/Science/data/frontend/Netlify/deployment mutation occurred during reconciliation; Phase 5C remains unstarted. Closure read-only catalog recheck confirms 21 Attendance RPCs = 15 `SECURITY DEFINER` + 6 invoker, `attendance_save_register` is definer, and exactly 11 Attendance tables retain direct authenticated write grants; these figures replace the pre-v14 impact-map counts.
 
