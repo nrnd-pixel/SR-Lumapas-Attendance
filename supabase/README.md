@@ -203,6 +203,42 @@ added only the expected three authenticated-`SECURITY DEFINER` warnings for the 
 RPCs, with no new anonymous Attendance exposure. This repository reconciliation must
 not apply or reapply v15 to production.
 
+
+## Phase 5D teacher-management write boundary — repository/local candidate
+
+`migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql`
+is the repository/local Phase 5D candidate. It is **not applied to production**.
+
+The candidate is intentionally grant-only. Existing coordinated write RPCs
+`attendance_admin_review_teacher_request(...)` and
+`attendance_admin_set_teacher_active(...)` already run as authenticated-only
+`SECURITY DEFINER` functions with fixed empty `search_path`, internal school-admin
+authorization, and private teacher-access audit writes. V16 therefore does not
+rewrite or alter either RPC. It revokes authenticated INSERT/UPDATE/DELETE on
+`attendance.teacher_school_memberships` and
+`attendance.teacher_class_assignments` while retaining authenticated SELECT,
+existing RLS policies/triggers, and service-role privileges.
+
+`verify/attendance_teacher_management_v16_contract.sql` is rollback-only and proves
+all six direct authenticated DML verbs are blocked even for a synthetic school
+administrator; assigned-teacher and outsider callers cannot use the admin mutation
+RPCs; authorized approval still coordinates signup request, school membership,
+class assignment and private audit history; Attendance-only disable/enable still
+updates both membership and assignments together and records
+`access_disabled`/`access_enabled`; `attendance_teacher_status()` remains
+correct; and invoker-mode `attendance_bootstrap()` still works through retained
+RLS-scoped SELECT access.
+
+Phase 5D deliberately preserves the current generic `teacher` values in
+school memberships and class assignments even when the approved request records
+`class_teacher` or `assistant_teacher`. Persisting those assignment roles
+authoritatively remains the separate Phase 5E checkpoint.
+
+The Phase 0B, Phase 4B1V, and Phase 5A workflows reconstruct v16 only in isolated
+CI/local Supabase stacks. Production migration history must not be updated and v16
+must not be applied to live Supabase until a separate production-application
+checkpoint is explicitly approved.
+
 ## Known captured risks — preserved, not fixed here
 
 Phase 0B records the existing live design exactly; Phase 4B1 reporting work does
