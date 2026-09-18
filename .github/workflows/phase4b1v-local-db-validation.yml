@@ -40,6 +40,8 @@ jobs:
             .phase4b1v/supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql
           cp supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql \
             .phase4b1v/supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql
+          cp supabase/migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql \
+            .phase4b1v/supabase/migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql
           cat supabase/baseline/attendance_v1_reference_data.sql \
               supabase/fixtures/phase4b1v_reporting_fixture.sql \
             > .phase4b1v/supabase/seed.sql
@@ -64,6 +66,7 @@ jobs:
           grep -qx '20260913000000' <<<"$versions"
           grep -qx '20260917090547' <<<"$versions"
           grep -qx '20260918094529' <<<"$versions"
+          grep -qx '20260918131500' <<<"$versions"
 
           run_zero_rows() {
             local file="$1"
@@ -81,6 +84,7 @@ jobs:
           run_zero_rows supabase/verify/attendance_reporting_population_fixtures.sql
           run_zero_rows supabase/verify/attendance_reporting_v13_equivalence.sql
           run_zero_rows supabase/verify/attendance_reporting_v13_public_api.sql
+          run_zero_rows supabase/verify/attendance_student_movement_v15_contract.sql
 
       - name: Stop isolated local Supabase stack
         if: always()

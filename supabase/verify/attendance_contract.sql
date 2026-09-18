@@ -23,7 +23,7 @@ where e.name is null or a.name is null;
 -- 2. Exact public Attendance RPC signatures / return types / SECURITY DEFINER modes
 with expected(name, identity_args, result_type, security_definer) as (
   values
-    ('attendance_admin_move_class', 'p_enrolment_id uuid, p_to_class_id uuid, p_move_date date, p_remarks text', 'jsonb', false),
+    ('attendance_admin_move_class', 'p_enrolment_id uuid, p_to_class_id uuid, p_move_date date, p_remarks text', 'jsonb', true),
     ('attendance_admin_review_teacher_request', 'p_request_id uuid, p_action text, p_class_id uuid, p_assignment_type text, p_admin_note text', 'jsonb', true),
     ('attendance_admin_school_dashboard', 'p_school_id uuid, p_month date', 'jsonb', true),
     ('attendance_admin_school_dashboard_v2', 'p_school_id uuid, p_month date, p_population text', 'jsonb', true),
@@ -31,8 +31,8 @@ with expected(name, identity_args, result_type, security_definer) as (
     ('attendance_admin_student_roster', 'p_school_id uuid', 'jsonb', false),
     ('attendance_admin_teacher_requests', 'p_status text', 'jsonb', true),
     ('attendance_admin_teachers', '', 'jsonb', true),
-    ('attendance_admin_transfer_in', 'p_school_id uuid, p_class_id uuid, p_student_ref text, p_full_name text, p_gender text, p_start_date date, p_reporting_group text, p_include_in_class_stats boolean, p_remarks text', 'jsonb', false),
-    ('attendance_admin_transfer_out', 'p_enrolment_id uuid, p_last_date date, p_remarks text', 'jsonb', false),
+    ('attendance_admin_transfer_in', 'p_school_id uuid, p_class_id uuid, p_student_ref text, p_full_name text, p_gender text, p_start_date date, p_reporting_group text, p_include_in_class_stats boolean, p_remarks text', 'jsonb', true),
+    ('attendance_admin_transfer_out', 'p_enrolment_id uuid, p_last_date date, p_remarks text', 'jsonb', true),
     ('attendance_bootstrap', '', 'jsonb', false),
     ('attendance_class_period_report', 'p_class_id uuid, p_period_type text, p_term_id uuid, p_as_of_date date', 'jsonb', true),
     ('attendance_class_period_report_v2', 'p_class_id uuid, p_period_type text, p_population text, p_term_id uuid, p_as_of_date date', 'jsonb', true),
@@ -148,6 +148,19 @@ select 'register_write_boundary' as check_name, x.table_name as mismatch
 from (values
   ('attendance.daily_registers'::text),
   ('attendance.attendance_records'::text)
+) x(table_name)
+where not has_table_privilege('authenticated', x.table_name, 'SELECT')
+   or has_table_privilege('authenticated', x.table_name, 'INSERT')
+   or has_table_privilege('authenticated', x.table_name, 'UPDATE')
+   or has_table_privilege('authenticated', x.table_name, 'DELETE');
+
+-- 8b. Phase 5C student-movement write boundary: authenticated keeps read access
+-- but cannot bypass the three admin movement RPCs with direct table DML.
+select 'student_movement_write_boundary' as check_name, x.table_name as mismatch
+from (values
+  ('attendance.students'::text),
+  ('attendance.enrolments'::text),
+  ('attendance.student_movements'::text)
 ) x(table_name)
 where not has_table_privilege('authenticated', x.table_name, 'SELECT')
    or has_table_privilege('authenticated', x.table_name, 'INSERT')

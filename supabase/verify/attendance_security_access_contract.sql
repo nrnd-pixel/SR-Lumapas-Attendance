@@ -24,8 +24,8 @@ with actual as (
 select 'public_rpc_security_mode_inventory' as check_name, to_jsonb(actual) as mismatch
 from actual
 where total <> 21
-   or security_definer <> 15
-   or security_invoker <> 6;
+   or security_definer <> 18
+   or security_invoker <> 3;
 
 -- 2. Public/anon/authenticated EXECUTE boundary.
 with f as (
@@ -84,6 +84,12 @@ where n.nspname='public'
 -- 4. Security-definer authorization/delegation source markers.
 with required(proname,marker) as (
   values
+    ('attendance_admin_move_class','auth.uid()'),
+    ('attendance_admin_move_class','attendance.is_school_admin'),
+    ('attendance_admin_transfer_in','auth.uid()'),
+    ('attendance_admin_transfer_in','attendance.is_school_admin'),
+    ('attendance_admin_transfer_out','auth.uid()'),
+    ('attendance_admin_transfer_out','attendance.is_school_admin'),
     ('attendance_admin_review_teacher_request','auth.uid()'),
     ('attendance_admin_review_teacher_request','attendance.is_school_admin'),
     ('attendance_admin_school_dashboard_v2','auth.uid()'),
@@ -143,11 +149,8 @@ with expected(table_name,can_insert,can_update,can_delete) as (
     ('academic_years',true,true,true),
     ('calendar_dates',true,true,true),
     ('classes',true,true,true),
-    ('enrolments',true,true,true),
     ('schools',false,true,false),
     ('settings',true,true,true),
-    ('student_movements',true,false,false),
-    ('students',true,true,true),
     ('teacher_class_assignments',true,true,true),
     ('teacher_school_memberships',true,true,true),
     ('terms',true,true,true)

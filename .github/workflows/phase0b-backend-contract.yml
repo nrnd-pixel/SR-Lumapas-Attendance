@@ -24,8 +24,10 @@ jobs:
 
           v13_path = "supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql"
           v14_path = "supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql"
+          v15_path = "supabase/migrations/20260918131500_attendance_v15_student_movement_write_boundary.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
+          phase5c_movement_path = "supabase/verify/attendance_student_movement_v15_contract.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",
@@ -33,11 +35,12 @@ jobs:
               "supabase/baseline/production_migration_history.md",
               v13_path,
               v14_path,
+              v15_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
               "supabase/verify/attendance_reporting_v13_equivalence.sql",
           ]
-          for path in [*required, phase5a_fixture_path, phase5a_security_path]:
+          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path]:
               if not Path(path).is_file():
                   raise SystemExit(f"missing required file: {path}")
 
@@ -48,9 +51,11 @@ jobs:
           reporting_fixtures = Path("supabase/verify/attendance_reporting_population_fixtures.sql").read_text()
           reporting_v13 = Path(v13_path).read_text()
           register_v14 = Path(v14_path).read_text()
+          movement_v15 = Path(v15_path).read_text()
           reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
           phase5a_fixture = Path(phase5a_fixture_path).read_text()
           phase5a_security = Path(phase5a_security_path).read_text()
+          phase5c_movement = Path(phase5c_movement_path).read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -69,7 +74,7 @@ jobs:
           # Phase 5A synthetic security files are deliberately excluded from the
           # generic UUID/email scan above because their all-zero test IDs and
           # example.invalid accounts are deterministic fixtures, not production data.
-          phase5a_combined = phase5a_fixture + "\n" + phase5a_security
+          phase5a_combined = phase5a_fixture + "\n" + phase5a_security + "\n" + phase5c_movement
           phase5a_forbidden = {
               "service-role secret": r"\bsb_secret_[A-Za-z0-9_-]+\b",
               "legacy JWT/service key": r"\beyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\b",
@@ -124,6 +129,23 @@ jobs:
                   raise SystemExit(f"Phase 5A security verifier marker missing: {marker}")
           if phase5a_security.count("rollback;") < 6:
               raise SystemExit("Phase 5A role/write exercises must remain rollback-isolated")
+
+          phase5c_markers = [
+              "Phase 5C student-movement write-boundary verifier",
+              "movement_rpc_contract",
+              "movement_table_privilege",
+              "Direct authenticated students INSERT was not blocked",
+              "Assigned teacher unexpectedly used transfer-out",
+              "Outsider unexpectedly used move-class",
+              "Transfer-in movement history was not written",
+              "Transfer-out changed saved attendance history",
+              "Move Class changed old attendance history",
+          ]
+          for marker in phase5c_markers:
+              if marker not in phase5c_movement:
+                  raise SystemExit(f"Phase 5C movement verifier marker missing: {marker}")
+          if phase5c_movement.count("rollback;") < 6:
+              raise SystemExit("Phase 5C movement exercises must remain rollback-isolated")
 
           # Exact structural inventory from the captured Phase 0B baseline snapshot.
           expected_tables = {
@@ -340,6 +362,33 @@ jobs:
           if "create or replace function" in register_v14.lower():
               raise SystemExit("Phase 5B must not rewrite attendance_save_register body")
 
+          # Phase 5C migration: movement RPC privilege boundary only. Transfer In
+          # keeps its body; Transfer Out/Move Class are rewritten only to establish
+          # an explicit admin guard before privileged row access.
+          if re.search(r"(?i)\bscience\.", movement_v15):
+              raise SystemExit("Phase 5C migration must not touch Science objects")
+          if re.search(r"(?im)^\s*(truncate|drop\s+table|alter\s+table|grant)\b", movement_v15):
+              raise SystemExit("Phase 5C migration contains an out-of-scope structural/grant statement")
+          normalized_v15 = " ".join(movement_v15.lower().split())
+          v15_markers = [
+              "alter function public.attendance_admin_transfer_in( uuid,uuid,text,text,text,date,text,boolean,text ) security definer",
+              "create or replace function public.attendance_admin_transfer_out",
+              "create or replace function public.attendance_admin_move_class",
+              "security definer",
+              "attendance.teacher_school_memberships",
+              "attendance.is_school_admin",
+              "revoke insert, update, delete on attendance.students, attendance.enrolments, attendance.student_movements from authenticated",
+          ]
+          for marker in v15_markers:
+              if marker not in normalized_v15:
+                  raise SystemExit(f"Phase 5C migration marker missing: {marker}")
+          if movement_v15.lower().count("create or replace function public.attendance_admin_transfer_out") != 1:
+              raise SystemExit("Phase 5C must rewrite transfer-out exactly once")
+          if movement_v15.lower().count("create or replace function public.attendance_admin_move_class") != 1:
+              raise SystemExit("Phase 5C must rewrite move-class exactly once")
+          if movement_v15.lower().count("alter function public.attendance_admin_transfer_in") != 1:
+              raise SystemExit("Phase 5C must alter transfer-in mode exactly once")
+
           contract_markers = [
               "attendance_admin_school_dashboard_v2",
               "attendance_class_period_report_v2",
@@ -348,6 +397,7 @@ jobs:
               "reporting_shared_engine_contract",
               "legacy_reporting_wrapper",
               "register_write_boundary",
+              "student_movement_write_boundary",
           ]
           for marker in contract_markers:
               if marker not in contract:
