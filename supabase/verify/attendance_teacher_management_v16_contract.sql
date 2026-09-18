@@ -310,18 +310,6 @@ begin
     raise exception 'Authorized teacher approval result contract changed: %', v_review;
   end if;
 
-  if not exists (
-    select 1
-    from attendance.teacher_signup_requests r
-    where r.id='40000000-0000-0000-0000-000000000002'::uuid
-      and r.status='approved'
-      and r.approved_class_id='00000000-0000-0000-0000-000000000004'::uuid
-      and r.approved_assignment_type='assistant_teacher'
-      and r.reviewed_by='00000000-0000-0000-0000-000000000099'::uuid
-  ) then
-    raise exception 'Approved signup-request semantics changed';
-  end if;
-
   -- Phase 5E is separate: current membership/assignment roles must remain generic teacher.
   if not exists (
     select 1
@@ -408,6 +396,20 @@ reset role;
 
 do $phase5d_audit_path$
 begin
+  -- teacher_signup_requests is intentionally RPC-only for authenticated clients,
+  -- so inspect the coordinated request update only after resetting the test role.
+  if not exists (
+    select 1
+    from attendance.teacher_signup_requests r
+    where r.id='40000000-0000-0000-0000-000000000002'::uuid
+      and r.status='approved'
+      and r.approved_class_id='00000000-0000-0000-0000-000000000004'::uuid
+      and r.approved_assignment_type='assistant_teacher'
+      and r.reviewed_by='00000000-0000-0000-0000-000000000099'::uuid
+  ) then
+    raise exception 'Approved signup-request semantics changed';
+  end if;
+
   if (
     select count(*)
     from attendance_private.teacher_access_audit a
