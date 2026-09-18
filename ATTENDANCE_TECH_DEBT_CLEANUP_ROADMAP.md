@@ -432,7 +432,7 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 
 **Rollback remains available if a later production regression is discovered:** in one transaction, restore authenticated INSERT/UPDATE/DELETE on the two register tables and return `attendance_save_register(uuid,date,jsonb,text)` to `SECURITY INVOKER`, then rerun the frozen pre-v14 fingerprint checks. No data rollback is required by v14 itself because the migration transformed no data.
 
-**Next action:** STOP at the Phase 5B documentation-closure gate. This roadmap-only checkpoint records PR #66's completed merge; it must retain Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, and Phase 5A security validation green on its exact head and still requires explicit approval before merge. Do not apply/reapply v14 and do not start Phase 5C automatically. After this documentation closure merges, Phase 5C requires a fresh impact map and separate explicit approval before implementation.
+**Next action:** STOP at the Phase 5B documentation-closure gate. This documentation-only checkpoint records PR #66's completed merge; it must retain Phase 0A, Phase 0B, full Playwright, Phase 4B1V local DB validation, and Phase 5A security validation green on its exact head and still requires explicit approval before merge. Do not apply/reapply v14 and do not start Phase 5C automatically. After this documentation closure merges, Phase 5C requires a fresh impact map and separate explicit approval before implementation.
 
 **Recommended thinking effort:** High.
 
