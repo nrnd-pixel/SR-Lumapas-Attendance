@@ -204,10 +204,13 @@ RPCs, with no new anonymous Attendance exposure. This repository reconciliation 
 not apply or reapply v15 to production.
 
 
-## Phase 5D teacher-management write boundary — repository/local candidate
+## Phase 5D teacher-management write boundary — merged repository candidate
 
 `migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql`
-is the repository/local Phase 5D candidate. It is **not applied to production**.
+is the merged repository Phase 5D candidate from PR #71. Approved exact head
+`37040973da36a88f83cfb27551547758c46c84d1` merged as signed `main`
+`44aa4e9ecb46273dc30df5a0aac0d94e9c303448`. It is **not applied to production**;
+live Supabase remains on v15 `20260918144321 attendance_v15_student_movement_write_boundary`.
 
 The candidate is intentionally grant-only. Existing coordinated write RPCs
 `attendance_admin_review_teacher_request(...)` and
@@ -235,9 +238,14 @@ school memberships and class assignments even when the approved request records
 authoritatively remains the separate Phase 5E checkpoint.
 
 The Phase 0B, Phase 4B1V, and Phase 5A workflows reconstruct v16 only in isolated
-CI/local Supabase stacks. Production migration history must not be updated and v16
-must not be applied to live Supabase until a separate production-application
-checkpoint is explicitly approved.
+CI/local Supabase stacks. PR #71 final exact head passed Phase 0A `35401645755`,
+Phase 0B `35401645844`, Playwright `35401645750` with 60/60 Chromium tests in
+23.8s, Phase 4B1V `35401645871`, and Phase 5A `35401645765` before merge.
+Production migration history must not be updated and v16 must not be applied to
+live Supabase until a separate production-application checkpoint is explicitly
+approved. Fresh post-merge live verification confirms no v16 migration entry exists
+and both teacher-management tables still retain their pre-v16 authenticated write
+grants in production.
 
 ## Known captured risks — preserved, not fixed here
 
