@@ -1,0 +1,85 @@
+name: Phase 5A Security Access Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase5a-security-validation.yml'
+      - 'supabase/baseline/**'
+      - 'supabase/migrations/**'
+      - 'supabase/fixtures/phase4b1v_reporting_fixture.sql'
+      - 'supabase/fixtures/phase5a_security_fixture.sql'
+      - 'supabase/verify/attendance_contract.sql'
+      - 'supabase/verify/attendance_security_access_contract.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-access-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Prepare isolated local project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .phase5a
+          mkdir -p .phase5a
+          supabase init --workdir .phase5a --force
+          mkdir -p .phase5a/supabase/migrations
+          cp supabase/baseline/attendance_v1_schema.sql \
+            .phase5a/supabase/migrations/20260913000000_attendance_v1_schema.sql
+          cp supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql \
+            .phase5a/supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql
+          cat supabase/baseline/attendance_v1_reference_data.sql \
+              supabase/fixtures/phase4b1v_reporting_fixture.sql \
+              supabase/fixtures/phase5a_security_fixture.sql \
+            > .phase5a/supabase/seed.sql
+
+      - name: Start fresh local Supabase database and apply migrations
+        run: supabase db start --workdir .phase5a
+
+      - name: Verify Attendance security/access contracts
+        shell: bash
+        env:
+          DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || {
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          }
+
+          versions="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -c \
+            "select version from supabase_migrations.schema_migrations order by version;")"
+          printf '%s\n' "$versions"
+          grep -qx '20260913000000' <<<"$versions"
+          grep -qx '20260917090547' <<<"$versions"
+
+          run_zero_rows() {
+            local file="$1"
+            local out
+            out="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -f "$file")"
+            if [[ -n "$out" ]]; then
+              echo "Verifier returned mismatch rows: $file"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "PASS: $file"
+          }
+
+          run_zero_rows supabase/verify/attendance_contract.sql
+          run_zero_rows supabase/verify/attendance_security_access_contract.sql
+
+      - name: Stop isolated local Supabase stack
+        if: always()
+        run: supabase stop --workdir .phase5a --no-backup

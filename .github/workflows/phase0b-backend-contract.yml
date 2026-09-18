@@ -23,6 +23,8 @@ jobs:
           import sys
 
           v13_path = "supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql"
+          phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
+          phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",
@@ -33,7 +35,7 @@ jobs:
               "supabase/verify/attendance_reporting_population_fixtures.sql",
               "supabase/verify/attendance_reporting_v13_equivalence.sql",
           ]
-          for path in required:
+          for path in [*required, phase5a_fixture_path, phase5a_security_path]:
               if not Path(path).is_file():
                   raise SystemExit(f"missing required file: {path}")
 
@@ -44,6 +46,8 @@ jobs:
           reporting_fixtures = Path("supabase/verify/attendance_reporting_population_fixtures.sql").read_text()
           reporting_v13 = Path(v13_path).read_text()
           reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
+          phase5a_fixture = Path(phase5a_fixture_path).read_text()
+          phase5a_security = Path(phase5a_security_path).read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -58,6 +62,60 @@ jobs:
           for label, pattern in forbidden_patterns.items():
               if re.search(pattern, combined, re.I):
                   raise SystemExit(f"forbidden {label} found in Phase 0B public source")
+
+          # Phase 5A synthetic security files are deliberately excluded from the
+          # generic UUID/email scan above because their all-zero test IDs and
+          # example.invalid accounts are deterministic fixtures, not production data.
+          phase5a_combined = phase5a_fixture + "\n" + phase5a_security
+          phase5a_forbidden = {
+              "service-role secret": r"\bsb_secret_[A-Za-z0-9_-]+\b",
+              "legacy JWT/service key": r"\beyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\b",
+              "database URL": r"postgres(?:ql)?://",
+              "private key": r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+          }
+          for label, pattern in phase5a_forbidden.items():
+              if re.search(pattern, phase5a_combined, re.I):
+                  raise SystemExit(f"forbidden {label} found in Phase 5A security source")
+          phase5a_emails = re.findall(
+              r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+              phase5a_combined,
+              re.I,
+          )
+          if any(not email.lower().endswith("@example.invalid") for email in phase5a_emails):
+              raise SystemExit("non-synthetic email address found in Phase 5A security source")
+          if re.search(r"(?i)\bscience\.", phase5a_combined):
+              raise SystemExit("Phase 5A Attendance security source must not touch Science objects")
+
+          phase5a_fixture_markers = [
+              "Phase 5A synthetic-only security/access fixture",
+              "phase5a-teacher@example.invalid",
+              "phase5a-outsider@example.invalid",
+              "Synthetic Phase 5A write-boundary test day",
+              "2026-04-01",
+          ]
+          for marker in phase5a_fixture_markers:
+              if marker not in phase5a_fixture:
+                  raise SystemExit(f"Phase 5A fixture marker missing: {marker}")
+
+          phase5a_security_markers = [
+              "public_rpc_security_mode_inventory",
+              "unexpected_public_execute",
+              "security_definer_search_path",
+              "security_definer_authorization_marker",
+              "authenticated_direct_write_surface",
+              "private_audit_client_privilege",
+              "internal_reporting_engine_execute",
+              "Anonymous client: signup options succeeds",
+              "Outsider unexpectedly authorized",
+              "Direct DML baseline exposure was not exercised",
+              "Controlled attendance_save_register baseline failed",
+              "Authenticated client unexpectedly read private audit history",
+          ]
+          for marker in phase5a_security_markers:
+              if marker not in phase5a_security:
+                  raise SystemExit(f"Phase 5A security verifier marker missing: {marker}")
+          if phase5a_security.count("rollback;") < 6:
+              raise SystemExit("Phase 5A role/write exercises must remain rollback-isolated")
 
           # Exact structural inventory from the captured Phase 0B baseline snapshot.
           expected_tables = {
