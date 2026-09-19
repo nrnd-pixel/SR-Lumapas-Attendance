@@ -54,5 +54,6 @@ repository-owned incremental migration files.
 | `20260917090547` | `attendance_v13_shared_reporting_model` | Public repository migration; production-applied and verified 17 Sep 2026 |
 | `20260918094529` | `attendance_v14_register_write_boundary` | Public repository migration; production-applied and verified 18 Sep 2026; repository/live ledger reconciliation merged via PR #66 |
 | `20260918144321` | `attendance_v15_student_movement_write_boundary` | Public repository migration; production-applied and verified 18 Sep 2026; repository/live ledger reconciliation preserves exact reviewed SQL bytes |
+| `20260919005727` | `attendance_v16_teacher_management_write_boundary` | Public repository migration; production-applied and verified 19 Sep 2026; repository/live ledger reconciliation preserves exact reviewed SQL bytes |
 
-Attendance migrations recorded: **34**.
+Attendance migrations recorded: **35**.
