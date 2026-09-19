@@ -143,40 +143,16 @@ where position('SECURITY DEFINER' in def)=0
    or position('and c.active' in def)=0
    or position('auth.uid()' in def)>0;
 
--- 6. Current authenticated direct-write surface is explicit and exact.
-with expected(table_name,can_insert,can_update,can_delete) as (
-  values
-    ('academic_years',true,true,true),
-    ('calendar_dates',true,true,true),
-    ('classes',true,true,true),
-    ('schools',false,true,false),
-    ('settings',true,true,true),
-    ('terms',true,true,true)
-), actual as (
-  select
-    c.relname as table_name,
-    has_table_privilege('authenticated',c.oid,'INSERT') as can_insert,
-    has_table_privilege('authenticated',c.oid,'UPDATE') as can_update,
-    has_table_privilege('authenticated',c.oid,'DELETE') as can_delete
-  from pg_class c
-  join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='attendance' and c.relkind='r'
-    and (
-      has_table_privilege('authenticated',c.oid,'INSERT')
-      or has_table_privilege('authenticated',c.oid,'UPDATE')
-      or has_table_privilege('authenticated',c.oid,'DELETE')
-    )
-)
-select
-  'authenticated_direct_write_surface' as check_name,
-  coalesce(e.table_name,a.table_name) as mismatch
-from expected e
-full join actual a using(table_name)
-where e.table_name is null
-   or a.table_name is null
-   or e.can_insert is distinct from a.can_insert
-   or e.can_update is distinct from a.can_update
-   or e.can_delete is distinct from a.can_delete;
+-- 6. Phase 5F1 closes the remaining authenticated direct-write surface.
+select 'authenticated_direct_write_surface' as check_name, c.relname as mismatch
+from pg_class c
+join pg_namespace n on n.oid=c.relnamespace
+where n.nspname='attendance' and c.relkind='r'
+  and (
+    has_table_privilege('authenticated',c.oid,'INSERT')
+    or has_table_privilege('authenticated',c.oid,'UPDATE')
+    or has_table_privilege('authenticated',c.oid,'DELETE')
+  );
 
 -- 7. RLS and RPC-only/private tables remain explicit.
 select 'attendance_table_without_rls' as check_name, c.relname as mismatch

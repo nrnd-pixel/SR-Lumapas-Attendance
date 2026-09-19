@@ -302,6 +302,46 @@ rollback-isolated checks derived from live authorization context. No frontend/DO
 Auth/Science/Netlify change is part of this checkpoint. Do not reapply v17 during
 repository reconciliation.
 
+## Phase 5F1 structural-admin write boundary — repository/local candidate
+
+`migrations/20260919050000_attendance_v18_structural_write_boundary.sql` is the
+repository/local Phase 5F1 candidate. It has **not** been applied to production;
+live Supabase remains on v17
+`20260919015041 attendance_v17_teacher_role_persistence`.
+
+The migration is grant-only. It revokes authenticated INSERT/UPDATE/DELETE on
+`academic_years`, `calendar_dates`, `classes`, `schools`, `settings`, and
+`terms`. Authenticated SELECT remains available through the existing RLS model,
+service-role CRUD remains unchanged, and no RLS policy, trigger, foreign key,
+constraint, function/RPC, Auth setting, Science object, frontend/DOM, or Netlify
+configuration is modified.
+
+This boundary is intentionally conservative: the current cleanup frontend contains
+zero direct table writers and no structural-administration screen, while direct
+admin structural DML can change reporting periods/denominators or reach attendance
+history through parent cascades. Phase 5F1 does **not** introduce replacement
+structural-write RPCs; future rollover/structural administration remains a separate
+design checkpoint.
+
+`verify/attendance_structural_write_v18_contract.sql` is synthetic/local-only and
+rollback-isolated. It proves all six structural tables remain authenticated-readable
+but not directly writable, anonymous table access remains absent, service-role CRUD
+remains intact, the existing policy/trigger inventory and RLS stay present, no
+structural writer function is introduced implicitly, and even a valid synthetic
+school administrator is blocked from direct INSERT/UPDATE/DELETE at the privilege
+boundary.
+
+The shared `attendance_security_access_contract.sql` is updated so the expected
+final Attendance state has **zero authenticated direct table writes**. Phase 4B1V
+and Phase 5A reconstruct v18 after v17 and run the new structural verifier; Phase
+4B1V also retains all protected reporting equivalence/public-API checks.
+
+Rollback, if later required after a separately approved production application, is
+grant restoration only: restore the exact pre-v18 authenticated structural DML
+grants (full DML on academic years/calendar/classes/settings/terms and UPDATE-only
+on schools), then rerun the structural/security/reporting/browser gates. V18 changes
+no rows and no function bodies.
+
 ## Known captured risks — preserved, not fixed here
 
 Phase 0B records the existing live design exactly; Phase 4B1 reporting work does
