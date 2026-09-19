@@ -249,12 +249,16 @@ while authenticated SELECT, service-role CRUD, RLS/policies/triggers, coordinate
 teacher-admin RPC bodies, audit semantics, attendance history, and protected reporting
 fixtures remain unchanged. Do not reapply v16 during repository reconciliation.
 
-## Phase 5E teacher assignment-role persistence — repository/local candidate
+## Phase 5E teacher assignment-role persistence — production applied
 
-`migrations/20260919013000_attendance_v17_teacher_role_persistence.sql` is the
-repository/local Phase 5E candidate. It has **not** been applied to production;
-live Supabase remains on v16
-`20260919005727 attendance_v16_teacher_management_write_boundary`.
+`migrations/20260919015041_attendance_v17_teacher_role_persistence.sql` is the
+reconciled repository source for the production-applied Phase 5E migration. The
+reviewed repository candidate was originally version `20260919013000`; after
+separate explicit approval, those exact SQL bytes were applied once and Supabase
+recorded live migration
+`20260919015041 attendance_v17_teacher_role_persistence`. Repository/live
+reconciliation changes only the filename and reconstruction references; the Git
+blob remains `9f127e3615fae3e8a508b636435e6035d9fea560`.
 
 The migration keeps school-level membership roles generic (`admin`, `teacher`,
 `viewer`) and preserves existing class-access behavior. It expands only the
@@ -279,10 +283,24 @@ class access, `attendance_teacher_status()` exposes the persisted assignment
 role, enable/disable preserves it, approval audit semantics remain intact, and
 the Phase 5D direct authenticated DML boundary stays closed.
 
-The Phase 4B1V and Phase 5A local workflows now reconstruct v17 after v16 and run
+The Phase 4B1V and Phase 5A local workflows reconstruct v17 after v16 and run
 the v17 verifier at the final schema state. The historical v16 verifier remains
-source-controlled evidence of the pre-Phase-5E contract. No frontend/DOM/Auth/
-Science/Netlify change is part of this checkpoint.
+source-controlled evidence of the pre-Phase-5E contract.
+
+Post-production verification confirmed exactly one historical assignment changed
+from generic `teacher` to `class_teacher`, leaving one unmatched legacy/admin
+assignment as generic `teacher`; there were zero ambiguous or remaining eligible
+backfill candidates. School memberships, authenticated SELECT-only table access,
+service-role CRUD, RLS/policy/trigger counts, enable/disable semantics, teacher
+audit aggregates, and the 137 / 3,425 / 3,425 attendance-history baseline remained
+unchanged. Protected reporting population and shared-engine equivalence checks
+returned zero mismatches, and rollback-scoped live status/bootstrap checks confirmed
+the backfilled teacher retained class access and now reports `class_teacher`.
+The repository v17 verifier itself uses synthetic local fixture IDs and therefore
+is not run verbatim against production; production uses equivalent read-only and
+rollback-isolated checks derived from live authorization context. No frontend/DOM/
+Auth/Science/Netlify change is part of this checkpoint. Do not reapply v17 during
+repository reconciliation.
 
 ## Known captured risks — preserved, not fixed here
 
