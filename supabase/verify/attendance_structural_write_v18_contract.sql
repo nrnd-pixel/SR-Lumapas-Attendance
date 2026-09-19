@@ -105,7 +105,7 @@ select 'structural_admin_unexpected_writer_function' as check_name,
 from pg_proc p
 join pg_namespace n on n.oid=p.pronamespace
 where n.nspname in ('public','attendance','attendance_private')
-  and p.prosrc ~* '(insert[[:space:]]+into|update|delete[[:space:]]+from)[[:space:]]+attendance[.](academic_years|calendar_dates|classes|schools|settings|terms)\\m';
+  and p.prosrc ~* '(insert[[:space:]]+into|update|delete[[:space:]]+from)[[:space:]]+attendance[.](academic_years|calendar_dates|classes|schools|settings|terms)([^a-z_]|$)';
 
 -- 5. Even a valid school administrator cannot bypass the future controlled boundary.
 -- Use zero-row statements so a verifier failure cannot mutate fixture structure.
