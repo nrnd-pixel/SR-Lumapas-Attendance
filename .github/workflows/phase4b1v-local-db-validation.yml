@@ -42,8 +42,8 @@ jobs:
             .phase4b1v/supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql
           cp supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql \
             .phase4b1v/supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql
-          cp supabase/migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql \
-            .phase4b1v/supabase/migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql
+          cp supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql \
+            .phase4b1v/supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql
           cat supabase/baseline/attendance_v1_reference_data.sql \
               supabase/fixtures/phase4b1v_reporting_fixture.sql \
             > .phase4b1v/supabase/seed.sql
@@ -69,7 +69,7 @@ jobs:
           grep -qx '20260917090547' <<<"$versions"
           grep -qx '20260918094529' <<<"$versions"
           grep -qx '20260918144321' <<<"$versions"
-          grep -qx '20260919090000' <<<"$versions"
+          grep -qx '20260919005727' <<<"$versions"
 
           run_zero_rows() {
             local file="$1"
