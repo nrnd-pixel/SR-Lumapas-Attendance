@@ -302,12 +302,14 @@ rollback-isolated checks derived from live authorization context. No frontend/DO
 Auth/Science/Netlify change is part of this checkpoint. Do not reapply v17 during
 repository reconciliation.
 
-## Phase 5F1 structural-admin write boundary — repository/local candidate
+## Phase 5F1 structural-admin write boundary — production applied
 
-`migrations/20260919050000_attendance_v18_structural_write_boundary.sql` is the
-repository/local Phase 5F1 candidate. It has **not** been applied to production;
-live Supabase remains on v17
-`20260919015041 attendance_v17_teacher_role_persistence`.
+`migrations/20260919044948_attendance_v18_structural_write_boundary.sql` is the
+reconciled repository source for the production-applied Phase 5F1 boundary.
+Supabase recorded the live migration as
+`20260919044948 attendance_v18_structural_write_boundary`. The SQL bytes are
+unchanged from the reviewed repository candidate; Git blob remains
+`5182f1dff7a993151e81a331188aa692dfc86fb3`.
 
 The migration is grant-only. It revokes authenticated INSERT/UPDATE/DELETE on
 `academic_years`, `calendar_dates`, `classes`, `schools`, `settings`, and
