@@ -501,6 +501,8 @@ jobs:
               raise SystemExit("Phase 5F1 structural DML revoke marker missing")
           if structural_v18.lower().count("revoke insert, update, delete") != 1:
               raise SystemExit("Phase 5F1 must contain exactly one authenticated structural DML revoke")
+          if structural_v18.lower().count("revoke ") != 1:
+              raise SystemExit("Phase 5F1 migration must contain exactly one REVOKE statement")
           if re.search(r"(?im)^\s*(create|alter|drop|grant|insert|update|delete|truncate)\b", structural_v18):
               raise SystemExit("Phase 5F1 migration contains an out-of-scope statement")
           if re.search(r"(?i)\b(function|policy|trigger|constraint|auth\.)\b", structural_v18):
@@ -527,6 +529,8 @@ jobs:
                   raise SystemExit(f"Phase 5F1 structural verifier marker missing: {marker}")
           if phase5f1_structural.count("rollback;") < 1:
               raise SystemExit("Phase 5F1 structural DML exercises must remain rollback-isolated")
+          if re.search(r"(?im)^\s*commit\s*;", phase5f1_structural):
+              raise SystemExit("Phase 5F1 structural verifier must never commit synthetic writes")
 
           contract_markers = [
               "attendance_admin_school_dashboard_v2",
