@@ -27,11 +27,13 @@ jobs:
           v15_path = "supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql"
           v16_path = "supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql"
           v17_path = "supabase/migrations/20260919015041_attendance_v17_teacher_role_persistence.sql"
+          v18_path = "supabase/migrations/20260919050000_attendance_v18_structural_write_boundary.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           phase5c_movement_path = "supabase/verify/attendance_student_movement_v15_contract.sql"
           phase5d_teacher_path = "supabase/verify/attendance_teacher_management_v16_contract.sql"
           phase5e_teacher_path = "supabase/verify/attendance_teacher_role_v17_contract.sql"
+          phase5f1_structural_path = "supabase/verify/attendance_structural_write_v18_contract.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",
@@ -42,11 +44,12 @@ jobs:
               v15_path,
               v16_path,
               v17_path,
+              v18_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
               "supabase/verify/attendance_reporting_v13_equivalence.sql",
           ]
-          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path, phase5d_teacher_path, phase5e_teacher_path]:
+          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path, phase5d_teacher_path, phase5e_teacher_path, phase5f1_structural_path]:
               if not Path(path).is_file():
                   raise SystemExit(f"missing required file: {path}")
 
@@ -60,12 +63,14 @@ jobs:
           movement_v15 = Path(v15_path).read_text()
           teacher_v16 = Path(v16_path).read_text()
           teacher_v17 = Path(v17_path).read_text()
+          structural_v18 = Path(v18_path).read_text()
           reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
           phase5a_fixture = Path(phase5a_fixture_path).read_text()
           phase5a_security = Path(phase5a_security_path).read_text()
           phase5c_movement = Path(phase5c_movement_path).read_text()
           phase5d_teacher = Path(phase5d_teacher_path).read_text()
           phase5e_teacher = Path(phase5e_teacher_path).read_text()
+          phase5f1_structural = Path(phase5f1_structural_path).read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -480,6 +485,48 @@ jobs:
               raise SystemExit("Phase 5E must not change class-access authorization semantics")
           if re.search(r"(?i)\battendance_admin_set_teacher_active\b", teacher_v17):
               raise SystemExit("Phase 5E must not rewrite enable/disable semantics")
+
+          # Phase 5F1 migration: revoke the remaining authenticated structural-table
+          # DML only. RLS, policies, triggers, FK semantics, RPCs, Auth, and Science
+          # must remain untouched.
+          if re.search(r"(?i)\bscience\.", structural_v18):
+              raise SystemExit("Phase 5F1 migration must not touch Science objects")
+          normalized_v18 = " ".join(structural_v18.lower().split())
+          v18_marker = (
+              "revoke insert, update, delete on table attendance.academic_years, "
+              "attendance.calendar_dates, attendance.classes, attendance.schools, "
+              "attendance.settings, attendance.terms from authenticated"
+          )
+          if v18_marker not in normalized_v18:
+              raise SystemExit("Phase 5F1 structural DML revoke marker missing")
+          if structural_v18.lower().count("revoke insert, update, delete") != 1:
+              raise SystemExit("Phase 5F1 must contain exactly one authenticated structural DML revoke")
+          if re.search(r"(?im)^\s*(create|alter|drop|grant|insert|update|delete|truncate)\b", structural_v18):
+              raise SystemExit("Phase 5F1 migration contains an out-of-scope statement")
+          if re.search(r"(?i)\b(function|policy|trigger|constraint|auth\.)\b", structural_v18):
+              raise SystemExit("Phase 5F1 migration must not change functions, policies, triggers, constraints, or Auth")
+          structural_refs = set(re.findall(r"attendance\.([a-z_]+)", structural_v18.lower()))
+          expected_structural_refs = {
+              "academic_years","calendar_dates","classes","schools","settings","terms"
+          }
+          if structural_refs != expected_structural_refs:
+              raise SystemExit(f"Phase 5F1 structural table scope changed: {sorted(structural_refs)}")
+
+          phase5f1_markers = [
+              "Phase 5F1 structural-admin write-boundary verifier",
+              "structural_admin_table_privilege",
+              "structural_admin_policy_inventory",
+              "structural_admin_trigger_inventory",
+              "structural_admin_unexpected_writer_function",
+              "Direct authenticated % INSERT was not blocked",
+              "Direct authenticated % UPDATE was not blocked",
+              "Direct authenticated % DELETE was not blocked",
+          ]
+          for marker in phase5f1_markers:
+              if marker not in phase5f1_structural:
+                  raise SystemExit(f"Phase 5F1 structural verifier marker missing: {marker}")
+          if phase5f1_structural.count("rollback;") < 1:
+              raise SystemExit("Phase 5F1 structural DML exercises must remain rollback-isolated")
 
           contract_markers = [
               "attendance_admin_school_dashboard_v2",
