@@ -204,13 +204,15 @@ RPCs, with no new anonymous Attendance exposure. This repository reconciliation 
 not apply or reapply v15 to production.
 
 
-## Phase 5D teacher-management write boundary — merged repository candidate
+## Phase 5D teacher-management write boundary — production applied
 
-`migrations/20260919090000_attendance_v16_teacher_management_write_boundary.sql`
-is the merged repository Phase 5D candidate from PR #71. Approved exact head
-`37040973da36a88f83cfb27551547758c46c84d1` merged as signed `main`
-`44aa4e9ecb46273dc30df5a0aac0d94e9c303448`. It is **not applied to production**;
-live Supabase remains on v15 `20260918144321 attendance_v15_student_movement_write_boundary`.
+`migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql`
+is the reconciled repository source for the production-applied Phase 5D boundary. PR #71
+merged approved exact head `37040973da36a88f83cfb27551547758c46c84d1`; after
+separate production approval, the exact reviewed SQL was applied once and Supabase
+recorded `20260919005727 attendance_v16_teacher_management_write_boundary`.
+The prebuilt candidate filename was `20260919090000...`; reconciliation changes only
+the filename/reconstruction references and preserves the exact reviewed SQL bytes.
 
 The candidate is intentionally grant-only. Existing coordinated write RPCs
 `attendance_admin_review_teacher_request(...)` and
@@ -241,11 +243,11 @@ The Phase 0B, Phase 4B1V, and Phase 5A workflows reconstruct v16 only in isolate
 CI/local Supabase stacks. PR #71 final exact head passed Phase 0A `35401645755`,
 Phase 0B `35401645844`, Playwright `35401645750` with 60/60 Chromium tests in
 23.8s, Phase 4B1V `35401645871`, and Phase 5A `35401645765` before merge.
-Production migration history must not be updated and v16 must not be applied to
-live Supabase until a separate production-application checkpoint is explicitly
-approved. Fresh post-merge live verification confirms no v16 migration entry exists
-and both teacher-management tables still retain their pre-v16 authenticated write
-grants in production.
+Production now records live v16 `20260919005727`. Post-apply verification confirms
+authenticated INSERT/UPDATE/DELETE is revoked on both teacher-management tables,
+while authenticated SELECT, service-role CRUD, RLS/policies/triggers, coordinated
+teacher-admin RPC bodies, audit semantics, attendance history, and protected reporting
+fixtures remain unchanged. Do not reapply v16 during repository reconciliation.
 
 ## Known captured risks — preserved, not fixed here
 
