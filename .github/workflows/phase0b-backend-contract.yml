@@ -26,10 +26,12 @@ jobs:
           v14_path = "supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql"
           v15_path = "supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql"
           v16_path = "supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql"
+          v17_path = "supabase/migrations/20260919013000_attendance_v17_teacher_role_persistence.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           phase5c_movement_path = "supabase/verify/attendance_student_movement_v15_contract.sql"
           phase5d_teacher_path = "supabase/verify/attendance_teacher_management_v16_contract.sql"
+          phase5e_teacher_path = "supabase/verify/attendance_teacher_role_v17_contract.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",
@@ -39,11 +41,12 @@ jobs:
               v14_path,
               v15_path,
               v16_path,
+              v17_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
               "supabase/verify/attendance_reporting_v13_equivalence.sql",
           ]
-          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path, phase5d_teacher_path]:
+          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path, phase5d_teacher_path, phase5e_teacher_path]:
               if not Path(path).is_file():
                   raise SystemExit(f"missing required file: {path}")
 
@@ -56,11 +59,13 @@ jobs:
           register_v14 = Path(v14_path).read_text()
           movement_v15 = Path(v15_path).read_text()
           teacher_v16 = Path(v16_path).read_text()
+          teacher_v17 = Path(v17_path).read_text()
           reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
           phase5a_fixture = Path(phase5a_fixture_path).read_text()
           phase5a_security = Path(phase5a_security_path).read_text()
           phase5c_movement = Path(phase5c_movement_path).read_text()
           phase5d_teacher = Path(phase5d_teacher_path).read_text()
+          phase5e_teacher = Path(phase5e_teacher_path).read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -79,7 +84,7 @@ jobs:
           # Phase 5A synthetic security files are deliberately excluded from the
           # generic UUID/email scan above because their all-zero test IDs and
           # example.invalid accounts are deterministic fixtures, not production data.
-          phase5a_combined = phase5a_fixture + "\n" + phase5a_security + "\n" + phase5c_movement + "\n" + phase5d_teacher
+          phase5a_combined = phase5a_fixture + "\n" + phase5a_security + "\n" + phase5c_movement + "\n" + phase5d_teacher + "\n" + phase5e_teacher
           phase5a_forbidden = {
               "service-role secret": r"\bsb_secret_[A-Za-z0-9_-]+\b",
               "legacy JWT/service key": r"\beyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\b",
@@ -170,6 +175,23 @@ jobs:
                   raise SystemExit(f"Phase 5D teacher-management verifier marker missing: {marker}")
           if phase5d_teacher.count("rollback;") < 3:
               raise SystemExit("Phase 5D teacher-management exercises must remain rollback-isolated")
+
+          phase5e_markers = [
+              "Phase 5E teacher-role persistence verifier",
+              "teacher_assignment_role_constraint",
+              "teacher_role_approval_rpc_contract",
+              "teacher_role_table_privilege",
+              "Class Teacher assignment role was not persisted",
+              "Assistant Teacher assignment role was not persisted",
+              "Class access changed for assignment role",
+              "Teacher status role changed for",
+              "Enable/disable changed authoritative assignment role",
+          ]
+          for marker in phase5e_markers:
+              if marker not in phase5e_teacher:
+                  raise SystemExit(f"Phase 5E teacher-role verifier marker missing: {marker}")
+          if phase5e_teacher.count("rollback;") < 1:
+              raise SystemExit("Phase 5E teacher-role exercises must remain rollback-isolated")
 
           # Exact structural inventory from the captured Phase 0B baseline snapshot.
           expected_tables = {
@@ -430,6 +452,34 @@ jobs:
               raise SystemExit("Phase 5D must contain exactly one authenticated DML revoke")
           if re.search(r"(?im)^\s*(create\s+or\s+replace\s+function|alter\s+function)\b", teacher_v16):
               raise SystemExit("Phase 5D must not rewrite or alter teacher-management RPCs")
+
+          # Phase 5E migration: persist the already-approved class assignment type
+          # without changing school membership roles, access semantics, grants/RLS,
+          # Science objects, or public RPC signatures.
+          if re.search(r"(?i)\bscience\.", teacher_v17):
+              raise SystemExit("Phase 5E migration must not touch Science objects")
+          normalized_v17 = " ".join(teacher_v17.lower().split())
+          v17_markers = [
+              "alter table attendance.teacher_class_assignments drop constraint if exists teacher_class_assignments_role_check",
+              "check (role in ('teacher','viewer','class_teacher','assistant_teacher'))",
+              "create or replace function public.attendance_admin_review_teacher_request",
+              "values(v_req.user_id,v_req.school_id,'teacher',true)",
+              "values(v_req.user_id,v_target_class,v_assignment_type,true)",
+              "set role=v_assignment_type, active=true, updated_at=now()",
+              "having count(distinct approved_assignment_type)=1",
+              "and a.role='teacher'",
+          ]
+          for marker in v17_markers:
+              if marker not in normalized_v17:
+                  raise SystemExit(f"Phase 5E migration marker missing: {marker}")
+          if teacher_v17.lower().count("create or replace function public.attendance_admin_review_teacher_request") != 1:
+              raise SystemExit("Phase 5E must rewrite teacher approval RPC exactly once")
+          if re.search(r"(?im)^\s*(grant|revoke|drop\s+table|truncate)\b", teacher_v17):
+              raise SystemExit("Phase 5E migration contains an out-of-scope grant/destructive statement")
+          if re.search(r"(?i)\battendance\.can_access_class\b", teacher_v17):
+              raise SystemExit("Phase 5E must not change class-access authorization semantics")
+          if re.search(r"(?i)\battendance_admin_set_teacher_active\b", teacher_v17):
+              raise SystemExit("Phase 5E must not rewrite enable/disable semantics")
 
           contract_markers = [
               "attendance_admin_school_dashboard_v2",
