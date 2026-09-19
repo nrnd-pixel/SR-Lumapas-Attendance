@@ -4,20 +4,26 @@
 
 -- 1. Class-assignment role domain now supports both authoritative teacher types
 --    while retaining legacy teacher/viewer values.
+with actual as (
+  select pg_get_constraintdef(con.oid) as def
+  from pg_constraint con
+  join pg_class c on c.oid=con.conrelid
+  join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='attendance'
+    and c.relname='teacher_class_assignments'
+    and con.conname='teacher_class_assignments_role_check'
+)
 select 'teacher_assignment_role_constraint' as check_name,
-       pg_get_constraintdef(con.oid) as mismatch
-from pg_constraint con
-join pg_class c on c.oid=con.conrelid
-join pg_namespace n on n.oid=c.relnamespace
-where n.nspname='attendance'
-  and c.relname='teacher_class_assignments'
-  and con.conname='teacher_class_assignments_role_check'
-  and not (
-    pg_get_constraintdef(con.oid) ilike '%teacher%'
-    and pg_get_constraintdef(con.oid) ilike '%viewer%'
-    and pg_get_constraintdef(con.oid) ilike '%class_teacher%'
-    and pg_get_constraintdef(con.oid) ilike '%assistant_teacher%'
-  );
+       coalesce(def,'<missing>') as mismatch
+from (select 1) expected
+left join actual on true
+where def is null
+   or not (
+     def ilike '%teacher%'
+     and def ilike '%viewer%'
+     and def ilike '%class_teacher%'
+     and def ilike '%assistant_teacher%'
+   );
 
 -- 2. Approval RPC keeps the existing security boundary and signature.
 with actual as (
@@ -42,8 +48,10 @@ with actual as (
 )
 select 'teacher_role_approval_rpc_contract' as check_name,
        coalesce(identity_args,'<missing>') as mismatch
-from actual
-where identity_args <> 'p_request_id uuid, p_action text, p_class_id uuid, p_assignment_type text, p_admin_note text'
+from (select 1) expected
+left join actual on true
+where identity_args is null
+   or identity_args <> 'p_request_id uuid, p_action text, p_class_id uuid, p_assignment_type text, p_admin_note text'
    or result_type <> 'jsonb'
    or security_definer is not true
    or not (proconfig @> array['search_path=""']::text[])
