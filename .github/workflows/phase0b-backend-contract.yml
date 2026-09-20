@@ -29,6 +29,7 @@ jobs:
           v17_path = "supabase/migrations/20260919015041_attendance_v17_teacher_role_persistence.sql"
           v18_path = "supabase/migrations/20260919044948_attendance_v18_structural_write_boundary.sql"
           v19_path = "supabase/migrations/20260920060510_attendance_v19_fk_index_coverage.sql"
+          v20_path = "supabase/migrations/20260920082000_attendance_v20_enrolment_lifecycle_contract.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           phase5c_movement_path = "supabase/verify/attendance_student_movement_v15_contract.sql"
@@ -36,6 +37,7 @@ jobs:
           phase5e_teacher_path = "supabase/verify/attendance_teacher_role_v17_contract.sql"
           phase5f1_structural_path = "supabase/verify/attendance_structural_write_v18_contract.sql"
           phase6a_fk_index_path = "supabase/verify/attendance_fk_index_v19_contract.sql"
+          phase6b_lifecycle_path = "supabase/verify/attendance_enrolment_lifecycle_v20_contract.sql"
           required = [
               "supabase/README.md",
               "supabase/baseline/attendance_v1_schema.sql",
@@ -48,11 +50,12 @@ jobs:
               v17_path,
               v18_path,
               v19_path,
+              v20_path,
               "supabase/verify/attendance_contract.sql",
               "supabase/verify/attendance_reporting_population_fixtures.sql",
               "supabase/verify/attendance_reporting_v13_equivalence.sql",
           ]
-          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path, phase5d_teacher_path, phase5e_teacher_path, phase5f1_structural_path, phase6a_fk_index_path]:
+          for path in [*required, phase5a_fixture_path, phase5a_security_path, phase5c_movement_path, phase5d_teacher_path, phase5e_teacher_path, phase5f1_structural_path, phase6a_fk_index_path, phase6b_lifecycle_path]:
               if not Path(path).is_file():
                   raise SystemExit(f"missing required file: {path}")
 
@@ -68,6 +71,7 @@ jobs:
           teacher_v17 = Path(v17_path).read_text()
           structural_v18 = Path(v18_path).read_text()
           fk_index_v19 = Path(v19_path).read_text()
+          lifecycle_v20 = Path(v20_path).read_text()
           reporting_v13_equivalence = Path("supabase/verify/attendance_reporting_v13_equivalence.sql").read_text()
           phase5a_fixture = Path(phase5a_fixture_path).read_text()
           phase5a_security = Path(phase5a_security_path).read_text()
@@ -76,6 +80,7 @@ jobs:
           phase5e_teacher = Path(phase5e_teacher_path).read_text()
           phase5f1_structural = Path(phase5f1_structural_path).read_text()
           phase6a_fk_index = Path(phase6a_fk_index_path).read_text()
+          phase6b_lifecycle = Path(phase6b_lifecycle_path).read_text()
           combined = "\n".join(Path(p).read_text() for p in required)
 
           # Public-repository safety: concrete secrets/credentials/identity exports.
@@ -94,7 +99,7 @@ jobs:
           # Phase 5A synthetic security files are deliberately excluded from the
           # generic UUID/email scan above because their all-zero test IDs and
           # example.invalid accounts are deterministic fixtures, not production data.
-          phase5a_combined = phase5a_fixture + "\n" + phase5a_security + "\n" + phase5c_movement + "\n" + phase5d_teacher + "\n" + phase5e_teacher
+          phase5a_combined = phase5a_fixture + "\n" + phase5a_security + "\n" + phase5c_movement + "\n" + phase5d_teacher + "\n" + phase5e_teacher + "\n" + phase6b_lifecycle
           phase5a_forbidden = {
               "service-role secret": r"\bsb_secret_[A-Za-z0-9_-]+\b",
               "legacy JWT/service key": r"\beyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\b",
@@ -586,6 +591,54 @@ jobs:
                   raise SystemExit(f"Phase 6A FK verifier marker missing: {marker}")
           if re.search(r"(?im)^\s*(insert|update|delete|truncate|alter|drop|create|grant|revoke)\b", phase6a_fk_index):
               raise SystemExit("Phase 6A FK verifier must remain read-only")
+
+          # Phase 6B migration: one enrolment lifecycle CHECK only. The active
+          # flag remains independent; no RPC, grant, RLS, trigger, Science, Auth,
+          # data, or frontend operation belongs in this migration.
+          if re.search(r"(?i)\bscience\.", lifecycle_v20):
+              raise SystemExit("Phase 6B migration must not touch Science objects")
+          v20_sql = "\n".join(
+              line for line in lifecycle_v20.splitlines()
+              if not line.strip().startswith("--")
+          )
+          v20_statements = [stmt.strip() for stmt in v20_sql.split(";") if stmt.strip()]
+          if len(v20_statements) != 2:
+              raise SystemExit("Phase 6B migration must contain exactly two SQL statements")
+          expected_v20 = {
+              "alter table attendance.enrolments add constraint attendance_enrolments_lifecycle_status_check check ( ( end_date is null and enrolment_status in ('enrolled', 'transferred in') ) or ( end_date is not null and enrolment_status in ('transferred out', 'moved class') ) ) not valid",
+              "alter table attendance.enrolments validate constraint attendance_enrolments_lifecycle_status_check",
+          }
+          normalized_v20 = {" ".join(stmt.lower().split()) for stmt in v20_statements}
+          if normalized_v20 != expected_v20:
+              raise SystemExit(f"Phase 6B migration scope changed: {sorted(normalized_v20)}")
+          if re.search(r"(?i)\b(drop|grant|revoke|insert|update|delete|truncate|function|policy|trigger|auth\.)\b", v20_sql):
+              raise SystemExit("Phase 6B migration contains an out-of-scope operation")
+          if lifecycle_v20.lower().count("attendance_enrolments_lifecycle_status_check") != 2:
+              raise SystemExit("Phase 6B lifecycle CHECK name/count changed")
+          if re.search(r"(?i)\bactive\s*(=|is|in|not)\b", v20_sql):
+              raise SystemExit("Phase 6B migration must not constrain enrolments.active")
+
+          phase6b_markers = [
+              "Phase 6B enrolment-lifecycle verifier",
+              "attendance_enrolments_lifecycle_status_check",
+              "Current enrolment accepted TRANSFERRED OUT with NULL end_date",
+              "Ended enrolment accepted ENROLLED status",
+              "Unknown enrolment lifecycle status was accepted",
+              "Transfer Out did not preserve active historical enrolment semantics",
+              "Transfer Out changed historical report facts",
+              "Move Class old enrolment did not preserve active historical semantics",
+              "Move Class changed old-class historical report facts",
+              "attendance.reporting_class_period_facts",
+          ]
+          for marker in phase6b_markers:
+              if marker not in phase6b_lifecycle:
+                  raise SystemExit(f"Phase 6B lifecycle verifier marker missing: {marker}")
+          if phase6b_lifecycle.lower().count("rollback;") < 3:
+              raise SystemExit("Phase 6B synthetic lifecycle exercises must remain rollback-isolated")
+          if re.search(r"(?im)^\s*commit\s*;", phase6b_lifecycle):
+              raise SystemExit("Phase 6B lifecycle verifier must never commit synthetic writes")
+          if re.search(r"(?i)\bscience\.", phase6b_lifecycle):
+              raise SystemExit("Phase 6B lifecycle verifier must not touch Science objects")
 
           contract_markers = [
               "attendance_admin_school_dashboard_v2",
