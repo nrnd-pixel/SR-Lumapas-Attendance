@@ -568,7 +568,7 @@ jobs:
                   stmt,
               ):
                   raise SystemExit(f"Phase 6A contains an out-of-scope statement: {stmt}")
-          if re.search(r"(?i)\b(drop|alter|grant|revoke|insert|update|delete|truncate|function|policy|trigger|constraint|auth\.)\b", fk_index_v19):
+          if re.search(r"(?i)\b(drop|alter|grant|revoke|insert|update|delete|truncate|function|policy|trigger|constraint|auth\.)\b", v19_sql):
               raise SystemExit("Phase 6A migration contains an out-of-scope operation")
 
           phase6a_markers = [
