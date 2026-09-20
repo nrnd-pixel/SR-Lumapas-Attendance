@@ -277,7 +277,7 @@ Actions:
 **Exit:** application access model is explicit and verified.
 
 ### Phase 6 — Performance and data-model cleanup
-**Status:** Impact mapping complete from signed cleanup `main` `6949f0218a4806517bafc7299cc17a046d7a0932`; implementation has **not** started.
+**Status:** Impact mapping is merged; **Phase 6A repository/local implementation is in progress** from signed `main` `ef9aec8c0ca16d70c3a21527f50f2582a722b371` on focused branch `cleanup/phase-6a-fk-index-coverage`. Production remains unchanged on v18 `20260919044948 attendance_v18_structural_write_boundary`.
 **Goal:** Remove smaller backend debt before wider rollout without changing established Attendance behavior, historical eligibility, reporting semantics, Science objects, or production data unintentionally.
 
 Fresh Phase 6 impact-map findings:
@@ -292,7 +292,7 @@ Fresh Phase 6 impact-map findings:
 - No official gender source is currently established in the repository/live database evidence reviewed for this checkpoint. Phase 6C remains blocked until an official source is provided and a privacy-safe import/update method is agreed. Real pupil identifiers or source datasets must never be committed to the public repository or migration history.
 
 Proposed checkpoint split:
-- **6A — FK index coverage:** additive repository/local migration only. Add covering btree indexes for the exact six advisor-reported Attendance/Attendance-private foreign keys; remove nothing. Add a dedicated zero-row verifier proving all Attendance foreign keys are covered and no Science/index-removal statements are present. Update Phase 0B and both local-Supabase workflows so the newly generated migration is reconstructed and tested. No frontend/DOM/RPC/RLS/grant/function/data change is expected. Production application requires separate explicit approval.
+- **6A — FK index coverage:** **repository/local candidate implemented; validation pending.** Candidate migration `20260920032000_attendance_v19_fk_index_coverage.sql` adds exactly six ordinary B-tree indexes for the advisor-reported foreign keys and removes nothing. `attendance_fk_index_v19_contract.sql` is a read-only zero-row verifier covering every foreign key in `attendance` / `attendance_private`. Phase 0B statically restricts v19 to the exact six approved `CREATE INDEX` statements; Phase 4B1V and Phase 5A now reconstruct v19 and run the verifier. No frontend/DOM/RPC/RLS/grant/function/data change is included. Production application still requires separate explicit approval after repository merge/closure.
 - **6B — Enrolment lifecycle consistency:** repository/local schema-contract checkpoint only after 6A closes. Preserve all movement RPC signatures/returned JSON and historical-report eligibility. Formalise the current lifecycle vocabulary/shape with conservative database constraints and/or documentation, but do **not** equate ended enrolments with `active=false`. Extend the movement verifier to prove historical attendance remains visible after Transfer Out / Move Class and that invalid status/end-date combinations fail closed.
 - **6C — Gender completeness:** production data-quality operation only after an official source is supplied. Do not publish the source or per-pupil mapping. Preflight must reconcile 319 pupils without creating/deleting pupils or enrolments; post-update checks must prove only `students.gender` changed, 3A remains 14/11, unknown-gender counts fall as expected, total attendance/reporting fixtures remain unchanged, and gender-specific figures change only according to the official source.
 
@@ -305,7 +305,7 @@ Repository/UI ownership for Phase 6:
 
 Verification/build implications:
 - current browser suite is 65 tests and already covers Transfer In, Transfer Out, Move Class, 3A gender-complete reporting, incomplete-gender warnings, missing-register safeguards, February/Term-1 fixtures, and reporting populations;
-- `.github/workflows/phase0b-backend-contract.yml`, `phase4b1v-local-db-validation.yml`, and `phase5a-security-validation.yml` currently reconstruct migrations only through v18 and must be evolved deliberately when Phase 6A adds a migration;
+- `.github/workflows/phase0b-backend-contract.yml`, `phase4b1v-local-db-validation.yml`, and `phase5a-security-validation.yml` now include the repository v19 candidate and dedicated FK-index verifier; exact-head CI must prove all three changes before merge;
 - Phase 6A/6B must run Phase 0A, Phase 0B, full Playwright, Phase 4B1V Local DB Validation, and Phase 5A Security Access Validation. No assertion may be weakened to accommodate the new migration;
 - Netlify production remains unaffected by repository merges because the site is not Git-linked; any production database/data operation remains a separately approved step.
 
@@ -507,6 +507,8 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **20 Sep 2026:** Phase 6A repository/local implementation started from signed `main` `ef9aec8c0ca16d70c3a21527f50f2582a722b371` on `cleanup/phase-6a-fk-index-coverage`. Added repository candidate `20260920032000_attendance_v19_fk_index_coverage.sql` with exactly six additive B-tree FK-covering indexes, plus read-only `attendance_fk_index_v19_contract.sql`. Phase 0B now rejects any v19 scope beyond those six exact indexes; Phase 4B1V and Phase 5A reconstruct v19 and run the new verifier. `supabase/README.md` records candidate/rollback semantics. No production migration, row/data mutation, RPC/RLS/grant/function change, Science/Auth/frontend/Netlify change, or `production_migration_history.md` update occurred. Validation and PR review remain pending.
 
 - **20 Sep 2026:** Phase 6 performance/data-model impact map completed read-only from signed `main` `6949f0218a4806517bafc7299cc17a046d7a0932`. Performance Advisor reports exactly six unindexed Attendance/Attendance-private foreign keys and 25 unused indexes across the shared project; no index removal is proposed. Live enrolments are 319 current `ENROLLED` rows with no movement history yet, while v15 movement contracts show ended enrolments deliberately remain `active=true` so historical reporting is preserved. Gender is complete only for 3A (14 Male / 11 Female); 294 pupils in the other 14 active classes remain unset. Phase 6 is split into 6A FK index coverage, 6B enrolment lifecycle consistency, and 6C official-source gender completion. No migration, function, grant/RLS, frontend, Science, Netlify, Auth, or production-data mutation occurred during mapping.
 
