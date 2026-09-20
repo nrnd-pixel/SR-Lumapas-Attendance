@@ -344,11 +344,16 @@ grants (full DML on academic years/calendar/classes/settings/terms and UPDATE-on
 on schools), then rerun the structural/security/reporting/browser gates. V18 changes
 no rows and no function bodies.
 
-## Phase 6A foreign-key index coverage — repository/local candidate only
+## Phase 6A foreign-key index coverage — production applied
 
-`migrations/20260920032000_attendance_v19_fk_index_coverage.sql` is the Phase 6A
-repository/local candidate. It adds exactly six ordinary B-tree indexes covering
-the Attendance/Attendance-private foreign keys reported by Supabase Performance
+`migrations/20260920060510_attendance_v19_fk_index_coverage.sql` is the reconciled
+repository source for the production-applied Phase 6A migration. Supabase recorded
+the live migration as `20260920060510 attendance_v19_fk_index_coverage`. The SQL
+bytes are unchanged from the reviewed repository candidate; Git blob remains
+`998e10512a87f85c32b71b0a59d8fa0b2bdb23e4`.
+
+The migration adds exactly six ordinary B-tree indexes covering the
+Attendance/Attendance-private foreign keys reported by Supabase Performance
 Advisor:
 
 - `attendance.teacher_signup_requests(approved_class_id)`;
@@ -358,12 +363,12 @@ Advisor:
 - `attendance_private.teacher_access_audit(class_id)`;
 - `attendance_private.teacher_access_audit(request_id)`.
 
-The candidate is additive only. It removes no index and changes no rows, functions,
+The migration is additive only. It removes no index and changes no rows, functions,
 RPC signatures, grants, RLS policies, triggers, constraints, Auth settings, Science
 objects, frontend/DOM contracts, or Netlify configuration. The affected production
-tables currently contain only 1 signup request and 2 teacher-access audit rows, so
-this is preventive scale/referential-integrity hardening rather than a response to
-a demonstrated latency incident.
+tables contained only 1 signup request and 2 teacher-access audit rows at
+application time, so this is preventive scale/referential-integrity hardening rather
+than a response to a demonstrated latency incident.
 
 `verify/attendance_fk_index_v19_contract.sql` is a read-only zero-row verifier.
 It inspects PostgreSQL catalog metadata and fails if any foreign key in the
@@ -373,16 +378,20 @@ non-expression index whose leading columns cover that foreign key.
 Phase 0B statically restricts the v19 source to the exact six approved
 `CREATE INDEX ... USING btree` statements and rejects Science references,
 index removal, DML, grants/revokes, functions, policies, triggers, constraints,
-Auth changes, or unrelated operations. Phase 4B1V and Phase 5A reconstruct v19
-after v18 and run the new verifier while retaining all prior reporting/security
-checks.
+Auth changes, or unrelated operations. Phase 4B1V and Phase 5A reconstruct the
+reconciled live version after v18 and run the new verifier while retaining all
+prior reporting/security checks.
 
-This file does **not** mean v19 is live. Production still ends at
-`20260919044948 attendance_v18_structural_write_boundary` until a separate
-production application is explicitly approved and verified. If v19 is later
-applied and must be rolled back, rollback is limited to dropping these six new
-indexes and rerunning the full database/security/reporting/browser gates; no row
-rollback is required.
+Post-production verification confirmed all six index definitions, zero uncovered
+Attendance/Attendance-private foreign keys, disappearance of the
+`unindexed_foreign_keys` advisor finding, unchanged security-advisor baseline,
+15 active classes / 319 active pupils / 319 active enrolments, 3A 137 registers /
+3,425 attendance records, and protected reporting invariants of February
+398 / 0.9365 / 93.65% and Term 1 1,051 / 0.9342 / 93.42%.
+
+If v19 must be rolled back, rollback is limited to dropping these six new indexes
+and rerunning the full database/security/reporting/browser gates; no row rollback
+is required.
 
 ## Known captured risks — preserved, not fixed here
 
