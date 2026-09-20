@@ -134,6 +134,7 @@ export function createClient() {
         if (!result.error && result.data && result.data.session) {
           session = result.data.session;
           localStorage.setItem('__ATTENDANCE_TEST_SESSION__', JSON.stringify(session));
+          if (authCallback) await authCallback('SIGNED_IN', session);
         }
         return result;
       },
@@ -141,8 +142,10 @@ export function createClient() {
         calls.auth.push({ method: 'signUp', payload: copy(payload) });
         return configured('signUp', { data: { session: null, user: { email: payload.email } }, error: null });
       },
-      async signOut() {
-        calls.auth.push({ method: 'signOut' });
+      async signOut(options) {
+        calls.auth.push(options === undefined
+          ? { method: 'signOut' }
+          : { method: 'signOut', options: copy(options) });
         const result = configured('signOut', { error: null });
         if (!result.error) {
           session = null;
