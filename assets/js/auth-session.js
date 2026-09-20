@@ -22,9 +22,17 @@ function showRecovery(){hideEntryViews();$('recoveryView').classList.remove('hid
 export async function initAuthSession(sb,enterApp){
   $('loginForm').addEventListener('submit',async e=>{
     e.preventDefault();$('loginMsg').textContent='';$('loginBtn').disabled=true;$('loginBtn').innerHTML='<span class="spinner"></span> Signing in';
-    const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+    const {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
     $('loginBtn').disabled=false;$('loginBtn').textContent='Sign In';
-    if(error){$('loginMsg').textContent=authErrorMessage(error,'login');return;}await enterApp();
+    if(error){$('loginMsg').textContent=authErrorMessage(error,'login');return;}
+    if(data?.weakPassword){
+      const {error:signOutError}=await sb.auth.signOut({scope:'local'});
+      showLogin();
+      $('loginMsg').textContent=authErrorMessage({code:'weak_password'},'login');
+      if(signOutError)$('loginMsg').textContent+=' Close this tab after requesting the reset because the temporary sign-in session could not be fully cleared.';
+      return;
+    }
+    await enterApp();
   });
 
   $('forgotBtn').addEventListener('click',async()=>{
