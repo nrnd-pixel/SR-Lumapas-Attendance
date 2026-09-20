@@ -277,7 +277,7 @@ Actions:
 **Exit:** application access model is explicit and verified.
 
 ### Phase 6 — Performance and data-model cleanup
-**Status:** Impact mapping is merged; **Phase 6A repository/local implementation is complete on the working branch and exact-head revalidation is pending after this documentation update**. Work started from signed `main` `ef9aec8c0ca16d70c3a21527f50f2582a722b371` on `cleanup/phase-6a-fk-index-coverage`. Production remains unchanged on v18 `20260919044948 attendance_v18_structural_write_boundary`.
+**Status:** Impact mapping is merged; **Phase 6A repository/local implementation and validation are complete on the working branch; PR review/merge is pending.** Work started from signed `main` `ef9aec8c0ca16d70c3a21527f50f2582a722b371` on `cleanup/phase-6a-fk-index-coverage`. Production remains unchanged on v18 `20260919044948 attendance_v18_structural_write_boundary`; v19 has not been applied live.
 **Goal:** Remove smaller backend debt before wider rollout without changing established Attendance behavior, historical eligibility, reporting semantics, Science objects, or production data unintentionally.
 
 Fresh Phase 6 impact-map findings:
