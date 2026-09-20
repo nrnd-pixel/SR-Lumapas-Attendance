@@ -393,13 +393,16 @@ If v19 must be rolled back, rollback is limited to dropping these six new indexe
 and rerunning the full database/security/reporting/browser gates; no row rollback
 is required.
 
-## Phase 6B enrolment lifecycle contract — repository/local candidate only
+## Phase 6B enrolment lifecycle contract — production applied and reconciled
 
-`migrations/20260920082000_attendance_v20_enrolment_lifecycle_contract.sql`
-formalises the lifecycle shape already used by the movement RPCs without changing
-their signatures, bodies, returned JSON, authorization, or frontend contracts.
+`migrations/20260920100523_attendance_v20_enrolment_lifecycle_contract.sql`
+is the reconciled repository source for the production-applied Phase 6B migration.
+Supabase recorded the live migration as
+`20260920100523 attendance_v20_enrolment_lifecycle_contract`. The SQL bytes are
+unchanged from the reviewed repository candidate; Git blob remains
+`e11760161e7d2a36c1d6eff23d01a92168bf68c5`.
 
-The candidate adds one validated CHECK on `attendance.enrolments`:
+The migration adds one validated CHECK on `attendance.enrolments`:
 
 - `end_date IS NULL` requires `enrolment_status` to be `ENROLLED` or
   `TRANSFERRED IN`;
@@ -410,9 +413,11 @@ The migration deliberately does **not** constrain `active`. Closed Transfer Out
 and old Move Class rows remain `active=true` so existing register/reporting
 readers continue to include them for dates on or before their `end_date`.
 
-The CHECK is added `NOT VALID` and then validated. This leaves the repository
-result fully validated while reducing the future production validation lock
-profile compared with a single immediate-validation statement.
+The CHECK is added `NOT VALID` and then validated. Production post-application
+verification confirmed `attendance_enrolments_lifecycle_status_check` is present
+and validated, all 319 enrolments satisfy the lifecycle/date shape, movement rows
+remain 0, movement RPC metadata and enrolment grants/RLS policies are unchanged,
+and protected counts/reporting/security baselines remain unchanged.
 
 `verify/attendance_enrolment_lifecycle_v20_contract.sql` is synthetic/local only
 and rollback-isolated. It verifies the validated constraint, rejects malformed
@@ -423,13 +428,10 @@ asserts closed rows remain active, and compares historical
 Phase 0B freezes the migration to the exact two approved ALTER TABLE statements
 and rejects DML, grants/revokes, functions, policies, triggers, Auth changes,
 Science references, or any attempt to constrain `active`. Phase 4B1V and Phase
-5A reconstruct the v20 candidate after v19 and run the new verifier while
-retaining all prior reporting/security gates.
+5A reconstruct the reconciled live version after v19 and run the lifecycle
+verifier while retaining all prior reporting/security gates.
 
-This repository candidate does **not** mean v20 is live. Production remains on
-`20260920060510 attendance_v19_fk_index_coverage` until a separate production
-application is explicitly approved and verified. If v20 is later applied and must
-be rolled back, rollback is limited to dropping
+If v20 must be rolled back, rollback is limited to dropping
 `attendance_enrolments_lifecycle_status_check`; no row rollback is required.
 
 ## Known captured risks — preserved, not fixed here

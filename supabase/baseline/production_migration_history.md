@@ -58,5 +58,6 @@ repository-owned incremental migration files.
 | `20260919015041` | `attendance_v17_teacher_role_persistence` | Public repository migration; production-applied and verified 19 Sep 2026; repository/live ledger reconciliation preserves exact reviewed SQL bytes |
 | `20260919044948` | `attendance_v18_structural_write_boundary` | Public repository migration; production-applied and verified 19 Sep 2026; repository/live ledger reconciliation preserves exact reviewed SQL bytes |
 | `20260920060510` | `attendance_v19_fk_index_coverage` | Public repository migration; production-applied and verified 20 Sep 2026; repository/live ledger reconciliation preserves exact reviewed SQL bytes |
+| `20260920100523` | `attendance_v20_enrolment_lifecycle_contract` | Public repository migration; production-applied and verified 20 Sep 2026; repository/live ledger reconciliation preserves exact reviewed SQL bytes |
 
-Attendance migrations recorded: **38**.
+Attendance migrations recorded: **39**.

@@ -29,7 +29,7 @@ jobs:
           v17_path = "supabase/migrations/20260919015041_attendance_v17_teacher_role_persistence.sql"
           v18_path = "supabase/migrations/20260919044948_attendance_v18_structural_write_boundary.sql"
           v19_path = "supabase/migrations/20260920060510_attendance_v19_fk_index_coverage.sql"
-          v20_path = "supabase/migrations/20260920082000_attendance_v20_enrolment_lifecycle_contract.sql"
+          v20_path = "supabase/migrations/20260920100523_attendance_v20_enrolment_lifecycle_contract.sql"
           phase5a_fixture_path = "supabase/fixtures/phase5a_security_fixture.sql"
           phase5a_security_path = "supabase/verify/attendance_security_access_contract.sql"
           phase5c_movement_path = "supabase/verify/attendance_student_movement_v15_contract.sql"

@@ -58,8 +58,8 @@ jobs:
             .phase5a/supabase/migrations/20260919044948_attendance_v18_structural_write_boundary.sql
           cp supabase/migrations/20260920060510_attendance_v19_fk_index_coverage.sql \
             .phase5a/supabase/migrations/20260920060510_attendance_v19_fk_index_coverage.sql
-          cp supabase/migrations/20260920082000_attendance_v20_enrolment_lifecycle_contract.sql \
-            .phase5a/supabase/migrations/20260920082000_attendance_v20_enrolment_lifecycle_contract.sql
+          cp supabase/migrations/20260920100523_attendance_v20_enrolment_lifecycle_contract.sql \
+            .phase5a/supabase/migrations/20260920100523_attendance_v20_enrolment_lifecycle_contract.sql
           cat supabase/baseline/attendance_v1_reference_data.sql \
               supabase/fixtures/phase4b1v_reporting_fixture.sql \
               supabase/fixtures/phase5a_security_fixture.sql \
@@ -90,7 +90,7 @@ jobs:
           grep -qx '20260919015041' <<<"$versions"
           grep -qx '20260919044948' <<<"$versions"
           grep -qx '20260920060510' <<<"$versions"
-          grep -qx '20260920082000' <<<"$versions"
+          grep -qx '20260920100523' <<<"$versions"
 
           run_zero_rows() {
             local file="$1"
