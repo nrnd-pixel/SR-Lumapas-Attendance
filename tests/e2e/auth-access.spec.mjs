@@ -65,6 +65,36 @@ test('teacher signs in, survives refresh, and signs out', async ({ page }) => {
   await harness.expectNoProductionRequests();
 });
 
+test('weak password sign-in directs teacher to password recovery without entering the app', async ({ page }) => {
+  const harness = await installHarness(page, {
+    session: null,
+    auth: {
+      signInWithPassword: {
+        data: { session: null },
+        error: { code: 'weak_password', message: 'Synthetic weak password response' }
+      }
+    },
+    rpc: {}
+  });
+
+  await page.goto('/');
+  await page.locator('#email').fill('teacher@example.test');
+  await page.locator('#password').fill('legacy7');
+  await page.locator('#loginBtn').click();
+
+  await expect(page.locator('#loginView')).toBeVisible();
+  await expect(page.locator('#appView')).toBeHidden();
+  await expect(page.locator('#loginMsg')).toContainText('Forgot password?');
+  await expect(page.locator('#loginMsg')).toContainText('at least 8 characters');
+
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'signInWithPassword')).toEqual([
+    { method: 'signInWithPassword', payload: { email: 'teacher@example.test', password: 'legacy7' } }
+  ]);
+  expect(calls.rpc).toEqual([]);
+  await harness.expectNoProductionRequests();
+});
+
 test('teacher scope exposes assigned class only', async ({ page }) => {
   const harness = await openAuthorized(page);
   await expect(page.locator('#classSelect option')).toHaveCount(1);
@@ -186,6 +216,58 @@ test('failed signup does not create pending signup state', async ({ page }) => {
 
   await expect(page.locator('#signupMsg')).toContainText('Synthetic signup failure');
   expect(await readPendingSignup(page)).toBeNull();
+  await harness.expectNoProductionRequests();
+});
+
+test('signup browser contract blocks passwords shorter than 8 characters before Auth', async ({ page }) => {
+  const school = { id: 'school-test', name: 'SR Lumapas Test', classes: [syntheticClass()] };
+  const harness = await installHarness(page, {
+    session: null,
+    rpc: { attendance_signup_options: { schools: [school] } }
+  });
+
+  await page.goto('/');
+  await page.locator('#openSignupBtn').click();
+  await page.locator('#signupName').fill('Short Password Teacher');
+  await page.locator('#signupEmail').fill('short.password@example.test');
+  await page.locator('#signupPassword').fill('1234567');
+  await page.locator('#signupClass').selectOption('class-3a');
+  await page.locator('#signupBtn').click();
+
+  await expect(page.locator('#signupPassword')).toHaveAttribute('minlength', '8');
+  expect(await page.locator('#signupPassword').evaluate(el => el.validity.tooShort)).toBe(true);
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'signUp')).toEqual([]);
+  expect(await readPendingSignup(page)).toBeNull();
+  await harness.expectNoProductionRequests();
+});
+
+test('signup renders server weak-password rejection without creating pending state', async ({ page }) => {
+  const school = { id: 'school-test', name: 'SR Lumapas Test', classes: [syntheticClass()] };
+  const harness = await installHarness(page, {
+    session: null,
+    auth: {
+      signUp: {
+        data: { session: null, user: null },
+        error: { code: 'weak_password', message: 'Synthetic weak password response' }
+      }
+    },
+    rpc: { attendance_signup_options: { schools: [school] } }
+  });
+
+  await page.goto('/');
+  await page.locator('#openSignupBtn').click();
+  await page.locator('#signupName').fill('Weak Password Teacher');
+  await page.locator('#signupEmail').fill('weak.password@example.test');
+  await page.locator('#signupPassword').fill('password8');
+  await page.locator('#signupClass').selectOption('class-3a');
+  await page.locator('#signupBtn').click();
+
+  await expect(page.locator('#signupMsg')).toContainText('security requirements');
+  await expect(page.locator('#signupMsg')).toContainText('at least 8 characters');
+  expect(await readPendingSignup(page)).toBeNull();
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'signUp')).toHaveLength(1);
   await harness.expectNoProductionRequests();
 });
 
@@ -421,6 +503,64 @@ test('password recovery rejects mismatched confirmation', async ({ page }) => {
   await expect(page.locator('#recoveryMsg')).toContainText('do not match');
   const calls = await harness.calls();
   expect(calls.auth.some(call => call.method === 'updateUser')).toBe(false);
+  await harness.expectNoProductionRequests();
+});
+
+test('password recovery browser contract blocks passwords shorter than 8 characters before Auth', async ({ page }) => {
+  const harness = await installHarness(page, { session: null, rpc: {} });
+  await page.goto('/');
+  await page.evaluate(() => window.__attendanceTestEmitAuth(
+    'PASSWORD_RECOVERY',
+    { user: { email: 'teacher@example.test' } }
+  ));
+
+  await expect(page.locator('#recoveryView')).toBeVisible();
+  await page.locator('#newPassword').fill('1234567');
+  await page.locator('#confirmPassword').fill('1234567');
+  await page.locator('#recoveryBtn').click();
+
+  await expect(page.locator('#newPassword')).toHaveAttribute('minlength', '8');
+  await expect(page.locator('#confirmPassword')).toHaveAttribute('minlength', '8');
+  expect(await page.locator('#newPassword').evaluate(el => el.validity.tooShort)).toBe(true);
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'updateUser')).toEqual([]);
+  expect(calls.auth.filter(call => call.method === 'signOut')).toEqual([]);
+  await harness.expectNoProductionRequests();
+});
+
+test('password recovery stays in recovery on server weak-password rejection', async ({ page }) => {
+  const harness = await installHarness(page, {
+    session: null,
+    auth: {
+      updateUser: {
+        data: { user: null },
+        error: { code: 'weak_password', message: 'Synthetic weak password response' }
+      }
+    },
+    rpc: {}
+  });
+  await page.goto('/');
+  await page.evaluate(() => window.__attendanceTestEmitAuth(
+    'PASSWORD_RECOVERY',
+    { user: { email: 'teacher@example.test' } }
+  ));
+
+  await page.locator('#newPassword').fill('password8');
+  await page.locator('#confirmPassword').fill('password8');
+  await page.locator('#recoveryBtn').click();
+
+  await expect(page.locator('#recoveryView')).toBeVisible();
+  await expect(page.locator('#loginView')).toBeHidden();
+  await expect(page.locator('#appView')).toBeHidden();
+  await expect(page.locator('#recoveryMsg')).toContainText('security requirements');
+  await expect(page.locator('#recoveryMsg')).toContainText('at least 8 characters');
+
+  const calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'updateUser')).toEqual([
+    { method: 'updateUser', payload: { password: 'password8' } }
+  ]);
+  expect(calls.auth.filter(call => call.method === 'signOut')).toEqual([]);
+  expect(calls.rpc).toEqual([]);
   await harness.expectNoProductionRequests();
 });
 
