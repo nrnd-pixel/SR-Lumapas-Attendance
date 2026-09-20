@@ -344,6 +344,46 @@ grants (full DML on academic years/calendar/classes/settings/terms and UPDATE-on
 on schools), then rerun the structural/security/reporting/browser gates. V18 changes
 no rows and no function bodies.
 
+## Phase 6A foreign-key index coverage — repository/local candidate only
+
+`migrations/20260920032000_attendance_v19_fk_index_coverage.sql` is the Phase 6A
+repository/local candidate. It adds exactly six ordinary B-tree indexes covering
+the Attendance/Attendance-private foreign keys reported by Supabase Performance
+Advisor:
+
+- `attendance.teacher_signup_requests(approved_class_id)`;
+- `attendance.teacher_signup_requests(requested_class_id)`;
+- `attendance.teacher_signup_requests(reviewed_by)`;
+- `attendance_private.teacher_access_audit(actor_user_id)`;
+- `attendance_private.teacher_access_audit(class_id)`;
+- `attendance_private.teacher_access_audit(request_id)`.
+
+The candidate is additive only. It removes no index and changes no rows, functions,
+RPC signatures, grants, RLS policies, triggers, constraints, Auth settings, Science
+objects, frontend/DOM contracts, or Netlify configuration. The affected production
+tables currently contain only 1 signup request and 2 teacher-access audit rows, so
+this is preventive scale/referential-integrity hardening rather than a response to
+a demonstrated latency incident.
+
+`verify/attendance_fk_index_v19_contract.sql` is a read-only zero-row verifier.
+It inspects PostgreSQL catalog metadata and fails if any foreign key in the
+`attendance` or `attendance_private` schema lacks a valid, ready, non-partial,
+non-expression index whose leading columns cover that foreign key.
+
+Phase 0B statically restricts the v19 source to the exact six approved
+`CREATE INDEX ... USING btree` statements and rejects Science references,
+index removal, DML, grants/revokes, functions, policies, triggers, constraints,
+Auth changes, or unrelated operations. Phase 4B1V and Phase 5A reconstruct v19
+after v18 and run the new verifier while retaining all prior reporting/security
+checks.
+
+This file does **not** mean v19 is live. Production still ends at
+`20260919044948 attendance_v18_structural_write_boundary` until a separate
+production application is explicitly approved and verified. If v19 is later
+applied and must be rolled back, rollback is limited to dropping these six new
+indexes and rerunning the full database/security/reporting/browser gates; no row
+rollback is required.
+
 ## Known captured risks — preserved, not fixed here
 
 Phase 0B records the existing live design exactly; Phase 4B1 reporting work does
