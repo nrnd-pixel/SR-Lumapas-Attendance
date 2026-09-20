@@ -277,15 +277,39 @@ Actions:
 **Exit:** application access model is explicit and verified.
 
 ### Phase 6 — Performance and data-model cleanup
-**Goal:** Remove smaller backend debt before wider rollout.
+**Status:** Impact mapping complete from signed cleanup `main` `6949f0218a4806517bafc7299cc17a046d7a0932`; implementation has **not** started.
+**Goal:** Remove smaller backend debt before wider rollout without changing established Attendance behavior, historical eligibility, reporting semantics, Science objects, or production data unintentionally.
 
-Actions:
-- add appropriate covering indexes for currently unindexed Attendance foreign keys;
-- do not remove “unused” indexes just because pilot traffic is low;
-- formalise consistency between enrolment `active`, `end_date`, and `enrolment_status`;
-- complete gender data from an official source only.
+Fresh Phase 6 impact-map findings:
+- Supabase Performance Advisor reports exactly **6 unindexed Attendance/Attendance-private foreign keys**: `teacher_signup_requests.approved_class_id`, `teacher_signup_requests.requested_class_id`, `teacher_signup_requests.reviewed_by`, `attendance_private.teacher_access_audit.actor_user_id`, `attendance_private.teacher_access_audit.class_id`, and `attendance_private.teacher_access_audit.request_id`. Current live row counts are only 1 signup request and 2 teacher-access audit rows, so there is no demonstrated production latency incident; the work is preventive scale/referential-integrity hardening.
+- Performance Advisor also reports unused indexes, including both Attendance and Science indexes. **Do not remove any index in Phase 6A merely because pilot traffic has not used it.** Science indexes are out of scope and Attendance index-removal is not part of this cleanup phase.
+- Live enrolments are currently internally consistent at the current-roster level: 319/319 are `active=true`, `end_date is null`, and `enrolment_status='ENROLLED'`. There are currently 0 live student-movement rows.
+- The lifecycle RPCs intentionally use richer historical semantics: Transfer In creates a current `TRANSFERRED IN` enrolment; Transfer Out sets `end_date` plus `TRANSFERRED OUT`; Move Class closes the old enrolment with `MOVED CLASS` and creates a new current `ENROLLED` enrolment. The closing operations intentionally do **not** set `active=false`.
+- Historical reporting and roster functions already filter on both `e.active` and date eligibility. Therefore redefining ended enrolments as `active=false` would remove their historical contribution from reports and is **not** an acceptable cleanup. Phase 6B must treat `active` as a row-validity/availability flag, while `end_date` + `enrolment_status` carry lifecycle state, unless a separately reviewed reporting redesign proves otherwise.
+- `enrolments` currently has only the date-order check `end_date is null or end_date >= start_date`; there is no database CHECK constraining `enrolment_status` values or tying status shape to `end_date`. Existing v15 movement tests already prove the intended statuses `ENROLLED`, `TRANSFERRED IN`, `TRANSFERRED OUT`, and `MOVED CLASS`.
+- Gender completeness is the largest live data-quality gap: 319 active pupils total; 25 have gender recorded (`3A` only: 14 Male, 11 Female) and **294 pupils across the other 14 active classes are unset**. Reporting intentionally treats anything other than exact `Male`/`Female` as unknown and keeps total attendance mathematically complete while warning that gender splits are partial.
+- Transfer In accepts `Male`, `Female`, `Other`, or blank. No live `Other` values are present. Completing gender data is therefore a data backfill, not a reporting-formula change.
+- No official gender source is currently established in the repository/live database evidence reviewed for this checkpoint. Phase 6C remains blocked until an official source is provided and a privacy-safe import/update method is agreed. Real pupil identifiers or source datasets must never be committed to the public repository or migration history.
 
-**Exit:** no obvious schema/index/data-quality debt blocks scale.
+Proposed checkpoint split:
+- **6A — FK index coverage:** additive repository/local migration only. Add covering btree indexes for the exact six advisor-reported Attendance/Attendance-private foreign keys; remove nothing. Add a dedicated zero-row verifier proving all Attendance foreign keys are covered and no Science/index-removal statements are present. Update Phase 0B and both local-Supabase workflows so the newly generated migration is reconstructed and tested. No frontend/DOM/RPC/RLS/grant/function/data change is expected. Production application requires separate explicit approval.
+- **6B — Enrolment lifecycle consistency:** repository/local schema-contract checkpoint only after 6A closes. Preserve all movement RPC signatures/returned JSON and historical-report eligibility. Formalise the current lifecycle vocabulary/shape with conservative database constraints and/or documentation, but do **not** equate ended enrolments with `active=false`. Extend the movement verifier to prove historical attendance remains visible after Transfer Out / Move Class and that invalid status/end-date combinations fail closed.
+- **6C — Gender completeness:** production data-quality operation only after an official source is supplied. Do not publish the source or per-pupil mapping. Preflight must reconcile 319 pupils without creating/deleting pupils or enrolments; post-update checks must prove only `students.gender` changed, 3A remains 14/11, unknown-gender counts fall as expected, total attendance/reporting fixtures remain unchanged, and gender-specific figures change only according to the official source.
+
+Repository/UI ownership for Phase 6:
+- frontend ownership remains `assets/js/student-management.js` for Transfer In/Out/Move Class and existing reporting modules for gender display/warnings; no Phase 6A/6B frontend edit is planned;
+- stable relevant DOM remains `#adminStudentList`, `#tiGender`, `#tiClass`, `#tiDate`, `#tiGroup`, `#tiStats`, `#toDate`, `#moveClassDialog`, and `#mcDate`;
+- relevant backend contracts remain `attendance_admin_student_roster`, `attendance_admin_transfer_in`, `attendance_admin_transfer_out`, `attendance_admin_move_class`, and the existing v2 reporting RPCs; no signature or returned-field change is planned;
+- authenticated table access for `students` / `enrolments` remains SELECT-only after v15; movement writes stay behind authenticated-only `SECURITY DEFINER` RPCs with fixed empty `search_path`;
+- no browser API/global wrapper change is planned. Existing dialog APIs, request serials, Auth/session ownership, and Netlify behavior remain untouched.
+
+Verification/build implications:
+- current browser suite is 65 tests and already covers Transfer In, Transfer Out, Move Class, 3A gender-complete reporting, incomplete-gender warnings, missing-register safeguards, February/Term-1 fixtures, and reporting populations;
+- `.github/workflows/phase0b-backend-contract.yml`, `phase4b1v-local-db-validation.yml`, and `phase5a-security-validation.yml` currently reconstruct migrations only through v18 and must be evolved deliberately when Phase 6A adds a migration;
+- Phase 6A/6B must run Phase 0A, Phase 0B, full Playwright, Phase 4B1V Local DB Validation, and Phase 5A Security Access Validation. No assertion may be weakened to accommodate the new migration;
+- Netlify production remains unaffected by repository merges because the site is not Git-linked; any production database/data operation remains a separately approved step.
+
+**Exit:** all agreed Attendance foreign-key coverage is explicit; enrolment lifecycle semantics are constrained/documented without historical-report regression; gender completeness is either completed from an official source or explicitly remains a blocked data-quality item; no Science or unrelated index cleanup is mixed into the phase.
 
 ### Phase 7 — Full equivalence QA
 **Goal:** Prove cleanup changed structure, not established outcomes.
@@ -483,6 +507,8 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **20 Sep 2026:** Phase 6 performance/data-model impact map completed read-only from signed `main` `6949f0218a4806517bafc7299cc17a046d7a0932`. Performance Advisor reports exactly six unindexed Attendance/Attendance-private foreign keys and 25 unused indexes across the shared project; no index removal is proposed. Live enrolments are 319 current `ENROLLED` rows with no movement history yet, while v15 movement contracts show ended enrolments deliberately remain `active=true` so historical reporting is preserved. Gender is complete only for 3A (14 Male / 11 Female); 294 pupils in the other 14 active classes remain unset. Phase 6 is split into 6A FK index coverage, 6B enrolment lifecycle consistency, and 6C official-source gender completion. No migration, function, grant/RLS, frontend, Science, Netlify, Auth, or production-data mutation occurred during mapping.
 
 - **20 Sep 2026:** Production Auth minimum-password alignment completed after separate explicit approval. The user confirmed applying exactly one Supabase Dashboard change: minimum password length **6→8**. Because the connected Supabase tools do not expose hosted Auth-config reads, the new minimum=8 is recorded as user-confirmed Dashboard evidence rather than independently MCP-read evidence. Fresh post-change read-only checks verified project `ACTIVE_HEALTHY`; live migration ledger still ends at `20260919044948 attendance_v18_structural_write_boundary`; 15 active classes; 319 active pupils / 319 active enrolments; 3A 137 registers / 3,425 attendance records; 2 confirmed Auth users; 3 Auth sessions; 1 active admin + 1 active teacher Attendance membership; and one active Science-teacher profile overlapping Attendance/Auth. Security Advisor findings are unchanged, including leaked-password protection disabled/unavailable on the Free plan. No SQL/migration/RPC/RLS/grant, Science data/object, SMTP/CAPTCHA, Netlify, or production Attendance-row mutation occurred. No real teacher credential was used for live sign-in verification; repository browser coverage remains the acceptance safety net for ordinary login, weak-password reset guidance, signup/recovery 8-character enforcement, recovery sign-out, and teacher-scope preservation.
 
