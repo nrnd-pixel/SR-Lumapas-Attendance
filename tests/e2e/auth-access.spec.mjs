@@ -52,6 +52,7 @@ test('teacher signs in, survives refresh, and signs out', async ({ page }) => {
 
   let calls = await harness.calls();
   expect(calls.auth.filter(call => call.method === 'signInWithPassword')).toHaveLength(1);
+  expect(calls.auth.filter(call => call.method === 'signOut')).toHaveLength(0);
 
   await page.reload();
   await expect(page.locator('#appView')).toBeVisible();
@@ -65,13 +66,18 @@ test('teacher signs in, survives refresh, and signs out', async ({ page }) => {
   await harness.expectNoProductionRequests();
 });
 
-test('weak password sign-in directs teacher to password recovery without entering the app', async ({ page }) => {
+test('weak password sign-in clears the local session and directs teacher to password recovery', async ({ page }) => {
+  const weakSession = { user: { email: 'teacher@example.test' }, access_token: 'synthetic-weak-session' };
   const harness = await installHarness(page, {
     session: null,
     auth: {
       signInWithPassword: {
-        data: { session: null },
-        error: { code: 'weak_password', message: 'Synthetic weak password response' }
+        data: {
+          user: weakSession.user,
+          session: weakSession,
+          weakPassword: { reasons: ['length'] }
+        },
+        error: null
       }
     },
     rpc: {}
@@ -87,11 +93,21 @@ test('weak password sign-in directs teacher to password recovery without enterin
   await expect(page.locator('#loginMsg')).toContainText('Forgot password?');
   await expect(page.locator('#loginMsg')).toContainText('at least 8 characters');
 
-  const calls = await harness.calls();
+  let calls = await harness.calls();
   expect(calls.auth.filter(call => call.method === 'signInWithPassword')).toEqual([
     { method: 'signInWithPassword', payload: { email: 'teacher@example.test', password: 'legacy7' } }
   ]);
+  expect(calls.auth.filter(call => call.method === 'signOut')).toEqual([
+    { method: 'signOut', options: { scope: 'local' } }
+  ]);
   expect(calls.rpc).toEqual([]);
+
+  await page.reload();
+  await expect(page.locator('#loginView')).toBeVisible();
+  await expect(page.locator('#appView')).toBeHidden();
+
+  calls = await harness.calls();
+  expect(calls.auth.filter(call => call.method === 'getSession')).toHaveLength(1);
   await harness.expectNoProductionRequests();
 });
 
