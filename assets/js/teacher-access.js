@@ -1,6 +1,6 @@
 import { state } from './app-state.js';
 import { $, esc, fillGroupedClasses } from './ui-helpers.js';
-import { hideEntryViews, showLogin } from './auth-session.js';
+import { authErrorMessage, hideEntryViews, showLogin } from './auth-session.js';
 
 const PENDING_SIGNUP_KEY='srlAttendancePendingTeacherSignup';
 const PENDING_SIGNUP_VERSION=2;
@@ -107,7 +107,7 @@ export async function submitSignup(e,enterApp){
   const name=$('signupName').value.trim(),email=$('signupEmail').value.trim(),password=$('signupPassword').value,classId=$('signupClass').value,role=$('signupRole').value;
   const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin+'/'}});
   $('signupBtn').disabled=false;
-  if(error){$('signupMsg').textContent=error.message;return;}
+  if(error){$('signupMsg').textContent=authErrorMessage(error,'signup');return;}
   const signupUserId=data?.user?.id||data?.session?.user?.id||null;
   if(signupUserId)storePendingSignup(signupUserId,name,classId,role);
   if(data.session){
