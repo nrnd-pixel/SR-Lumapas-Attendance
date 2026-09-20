@@ -393,6 +393,45 @@ If v19 must be rolled back, rollback is limited to dropping these six new indexe
 and rerunning the full database/security/reporting/browser gates; no row rollback
 is required.
 
+## Phase 6B enrolment lifecycle contract — repository/local candidate only
+
+`migrations/20260920082000_attendance_v20_enrolment_lifecycle_contract.sql`
+formalises the lifecycle shape already used by the movement RPCs without changing
+their signatures, bodies, returned JSON, authorization, or frontend contracts.
+
+The candidate adds one validated CHECK on `attendance.enrolments`:
+
+- `end_date IS NULL` requires `enrolment_status` to be `ENROLLED` or
+  `TRANSFERRED IN`;
+- `end_date IS NOT NULL` requires `enrolment_status` to be
+  `TRANSFERRED OUT` or `MOVED CLASS`.
+
+The migration deliberately does **not** constrain `active`. Closed Transfer Out
+and old Move Class rows remain `active=true` so existing register/reporting
+readers continue to include them for dates on or before their `end_date`.
+
+The CHECK is added `NOT VALID` and then validated. This leaves the repository
+result fully validated while reducing the future production validation lock
+profile compared with a single immediate-validation statement.
+
+`verify/attendance_enrolment_lifecycle_v20_contract.sql` is synthetic/local only
+and rollback-isolated. It verifies the validated constraint, rejects malformed
+status/end-date combinations, executes the real Transfer Out and Move Class RPCs,
+asserts closed rows remain active, and compares historical
+`attendance.reporting_class_period_facts` JSON before and after each movement.
+
+Phase 0B freezes the migration to the exact two approved ALTER TABLE statements
+and rejects DML, grants/revokes, functions, policies, triggers, Auth changes,
+Science references, or any attempt to constrain `active`. Phase 4B1V and Phase
+5A reconstruct the v20 candidate after v19 and run the new verifier while
+retaining all prior reporting/security gates.
+
+This repository candidate does **not** mean v20 is live. Production remains on
+`20260920060510 attendance_v19_fk_index_coverage` until a separate production
+application is explicitly approved and verified. If v20 is later applied and must
+be rolled back, rollback is limited to dropping
+`attendance_enrolments_lifecycle_status_check`; no row rollback is required.
+
 ## Known captured risks — preserved, not fixed here
 
 Phase 0B records the existing live design exactly; Phase 4B1 reporting work does
