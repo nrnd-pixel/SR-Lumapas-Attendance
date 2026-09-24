@@ -4,7 +4,7 @@
 **Live site:** https://srlumapas.netlify.app/  
 **Live version:** v0.7  
 **Cleanup baseline:** v1.0  
-**Last updated:** 19 September 2026
+**Last updated:** 24 September 2026
 
 ## Purpose
 
@@ -338,6 +338,8 @@ Verification/build implications:
 **Next action:** Phase 6C impact/preflight is complete, but the production data operation remains blocked. Obtain an official pupil source keyed by `Student ID / student_ref` with gender (class and full name may be included as cross-checks). Once provided, perform a **dry-run reconciliation only** against all 319 current pupils and STOP before any production update: report duplicates, missing/extra IDs, unsupported values, class/name mismatches, 3A agreement with 14 Male / 11 Female, and expected per-class gender totals. Keep the real mapping private and out of GitHub/migrations/CI/logs. Do not update production gender data until that dry-run is reviewed and explicitly approved.
 
 ### Phase 7 — Full equivalence QA
+**Status:** Phase 7A equivalence-contract freeze is implemented on `qa/phase-7a-equivalence-contract` from exact signed baseline `7c13336afd3338d7a439406405322579dfe86e45`; exact-head verification is pending. Phase 7B/7C/7D have not started.
+
 **Goal:** Prove cleanup changed structure, not established outcomes.
 
 Actions:
@@ -347,7 +349,25 @@ Actions:
 - verify roster, teacher access, corrections, student movements, historical counts, and reporting equivalence;
 - review full diff before promotion.
 
-**Exit:** all agreed equivalence checks pass with no unexplained differences.
+Phase 7 checkpoint split:
+- **7A — Equivalence Contract Freeze:** freeze the public-safe acceptance matrix in `docs/PHASE7_EQUIVALENCE_CONTRACT.md`, including exact v1.0 source baseline, live v0.7/v1.0 separation, protected counts/reporting fixtures, browser/DB/security acceptance layers, Phase 6C known exception, and Phase 8 deployment boundary. Documentation/QA contract only; no runtime or production mutation.
+- **7B — Full Automated QA:** run Phase 0A, Phase 0B, Phase 1 Playwright, Phase 4B1V, Phase 5A, and all included database verifiers on one exact candidate SHA. Do not weaken assertions.
+- **7C — Live Read-only Equivalence Seal:** verify the production Attendance migration/API/security/aggregate/reporting contract without writes and record only sanitized aggregate evidence.
+- **7D — Final Equivalence Review:** review the complete release-candidate diff, known exceptions, CI, live seal, deployment boundary, rollback plan, and Phase 8 handoff. If a real defect is found, stop and correct it in a separate focused branch/PR.
+
+Phase 7A frozen baseline:
+- cleanup candidate baseline: `7c13336afd3338d7a439406405322579dfe86e45`;
+- protected live site remains v0.7 at `https://srlumapas.netlify.app/`;
+- the password-recovery race reproduced on live v0.7 does not represent the cleaned v1.0 state: Phase 2A already fixes recovery priority and current browser coverage proves the corrected v1.0 flow;
+- live Attendance migration remains `20260920100523 attendance_v20_enrolment_lifecycle_contract`;
+- 15 active classes / 319 active pupils / 319 active enrolments / 0 ended enrolments / 0 movement rows;
+- 3A remains 137 registers / 3,425 attendance records;
+- February 2026 remains 398 / 0.9365 / 93.65% with 17 completed and 0 missing registers;
+- Term 1 remains 1,051 / 0.9342 / 93.42% with 45 completed and 0 missing registers;
+- Phase 6C remains a known data-quality exception at 294 active pupils with unknown gender and must not be silently treated as a regression or inferred from names;
+- Security Advisor baseline remains 2 `rls_enabled_no_policy` INFO, 4 `anon_security_definer_function_executable` WARN, 18 `authenticated_security_definer_function_executable` WARN, and 1 `auth_leaked_password_protection` WARN.
+
+**Exit:** all agreed equivalence checks pass with no unexplained differences. Phase 8 must not begin automatically.
 
 ### Phase 8 — Pilot cleaned build
 Deploy a safe preview/staging build and test with admin plus teachers from multiple year levels. Collect real feedback on login, mobile attendance, corrections, reports, and performance.
@@ -533,6 +553,8 @@ For transfers, use eligible pupil-days. Missing registers must never be treated 
 **Recommended thinking effort:** High.
 
 ## Change log
+
+- **24 Sep 2026:** Phase 7A equivalence-contract freeze implemented from exact signed `main` `7c13336afd3338d7a439406405322579dfe86e45` on `qa/phase-7a-equivalence-contract`. Added public-safe `docs/PHASE7_EQUIVALENCE_CONTRACT.md` and updated the canonical roadmap only; no application runtime, DOM, RPC, SQL migration, grant/RLS/policy/trigger, Auth setting, Science object, Netlify deployment, or production data changed. Fresh live read-only evidence still shows `20260920100523 attendance_v20_enrolment_lifecycle_contract`, 15 active classes / 319 active pupils / 319 active enrolments, 3A 137 registers / 3,425 attendance records, February 398 / 0.9365 / 93.65%, Term 1 1,051 / 0.9342 / 93.42%, 294 unknown-gender pupils, and the unchanged Security Advisor baseline. The password-recovery race reproduced on live v0.7 is explicitly distinguished from cleaned v1.0, where Phase 2A already contains the corrected recovery flow. Exact-head CI remains mandatory before 7A can be considered ready; Phase 7B/7C/7D have not started.
 
 - **20 Sep 2026:** Phase 6C read-only impact/preflight completed from signed `main` `2d1aff6d6acc5580437f93f513e07dc1ef3fd42e`. Live gender completeness remains 25 known in 3A (14 Male / 11 Female) and 294 unknown across the other 14 classes, with no live `Other` values. `attendance.students.gender` is nullable text; authenticated table access is SELECT-only; the only current students writer is `attendance_admin_transfer_in`; no existing UI/RPC edits gender for an already-enrolled pupil. Reporting reads the current gender dynamically, so a future backfill will retrospectively reclassify historical male/female splits while protected total attendance mathematics must remain invariant. Recommended path is a private transactional production-only update after an exact 319/319 dry-run keyed by official `student_ref`; real mappings must never enter the public repository or migration history. No production/repository runtime, SQL, RPC, grant/RLS/policy/trigger, frontend/DOM, Auth, Science, Netlify, or pupil-data mutation occurred. Production update remains blocked pending the official source and explicit approval.
 
