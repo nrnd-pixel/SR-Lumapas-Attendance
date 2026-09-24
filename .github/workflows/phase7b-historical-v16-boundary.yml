@@ -1,0 +1,199 @@
+name: Phase 7B Historical v16 Boundary
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase7b-historical-v16-boundary.yml'
+      - 'supabase/baseline/**'
+      - 'supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql'
+      - 'supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql'
+      - 'supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql'
+      - 'supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql'
+      - 'supabase/fixtures/phase4b1v_reporting_fixture.sql'
+      - 'supabase/fixtures/phase5a_security_fixture.sql'
+      - 'supabase/verify/attendance_contract.sql'
+      - 'supabase/verify/attendance_reporting_population_fixtures.sql'
+      - 'supabase/verify/attendance_reporting_v13_equivalence.sql'
+      - 'supabase/verify/attendance_reporting_v13_public_api.sql'
+      - 'supabase/verify/attendance_security_access_contract.sql'
+      - 'supabase/verify/attendance_student_movement_v15_contract.sql'
+      - 'supabase/verify/attendance_teacher_management_v16_contract.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  historical-v16-reporting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Prepare isolated v16 reporting project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .phase7b-v16-reporting
+          mkdir -p .phase7b-v16-reporting
+          supabase init --workdir .phase7b-v16-reporting --force
+          mkdir -p .phase7b-v16-reporting/supabase/migrations
+          cp supabase/baseline/attendance_v1_schema.sql \
+            .phase7b-v16-reporting/supabase/migrations/20260913000000_attendance_v1_schema.sql
+          cp supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql \
+            .phase7b-v16-reporting/supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql
+          cp supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql \
+            .phase7b-v16-reporting/supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql
+          cp supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql \
+            .phase7b-v16-reporting/supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql
+          cp supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql \
+            .phase7b-v16-reporting/supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql
+          cat supabase/baseline/attendance_v1_reference_data.sql \
+              supabase/fixtures/phase4b1v_reporting_fixture.sql \
+            > .phase7b-v16-reporting/supabase/seed.sql
+
+      - name: Start historical v16 reporting database
+        run: supabase db start --workdir .phase7b-v16-reporting
+
+      - name: Verify historical v16 reporting boundary
+        shell: bash
+        env:
+          DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || {
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          }
+
+          v16_sha="3816f87f32663eb3f4ef9edd8155038d70bae1ce"
+          git cat-file -e "$v16_sha^{commit}"
+          cmp <(git show "$v16_sha:supabase/verify/attendance_teacher_management_v16_contract.sql") \
+              supabase/verify/attendance_teacher_management_v16_contract.sql
+
+          versions="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -c \
+            "select version from supabase_migrations.schema_migrations order by version;")"
+          expected=$'20260913000000\n20260917090547\n20260918094529\n20260918144321\n20260919005727'
+          if [[ "$versions" != "$expected" ]]; then
+            echo "Historical v16 migration boundary changed"
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected" "$versions"
+            exit 1
+          fi
+
+          run_zero_rows() {
+            local file="$1"
+            local out
+            out="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -f "$file")"
+            if [[ -n "$out" ]]; then
+              echo "Verifier returned mismatch rows: $file"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "PASS: $file"
+          }
+
+          run_zero_rows supabase/verify/attendance_contract.sql
+          run_zero_rows supabase/verify/attendance_reporting_population_fixtures.sql
+          run_zero_rows supabase/verify/attendance_reporting_v13_equivalence.sql
+          run_zero_rows supabase/verify/attendance_reporting_v13_public_api.sql
+          run_zero_rows supabase/verify/attendance_student_movement_v15_contract.sql
+          run_zero_rows supabase/verify/attendance_teacher_management_v16_contract.sql
+
+      - name: Stop historical v16 reporting stack
+        if: always()
+        run: supabase stop --workdir .phase7b-v16-reporting --no-backup
+
+  historical-v16-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Prepare isolated v16 security project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .phase7b-v16-security
+          mkdir -p .phase7b-v16-security
+          supabase init --workdir .phase7b-v16-security --force
+          mkdir -p .phase7b-v16-security/supabase/migrations
+          cp supabase/baseline/attendance_v1_schema.sql \
+            .phase7b-v16-security/supabase/migrations/20260913000000_attendance_v1_schema.sql
+          cp supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql \
+            .phase7b-v16-security/supabase/migrations/20260917090547_attendance_v13_shared_reporting_model.sql
+          cp supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql \
+            .phase7b-v16-security/supabase/migrations/20260918094529_attendance_v14_register_write_boundary.sql
+          cp supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql \
+            .phase7b-v16-security/supabase/migrations/20260918144321_attendance_v15_student_movement_write_boundary.sql
+          cp supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql \
+            .phase7b-v16-security/supabase/migrations/20260919005727_attendance_v16_teacher_management_write_boundary.sql
+          cat supabase/baseline/attendance_v1_reference_data.sql \
+              supabase/fixtures/phase4b1v_reporting_fixture.sql \
+              supabase/fixtures/phase5a_security_fixture.sql \
+            > .phase7b-v16-security/supabase/seed.sql
+
+      - name: Start historical v16 security database
+        run: supabase db start --workdir .phase7b-v16-security
+
+      - name: Verify historical v16 security boundary
+        shell: bash
+        env:
+          DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || {
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          }
+
+          versions="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -c \
+            "select version from supabase_migrations.schema_migrations order by version;")"
+          expected=$'20260913000000\n20260917090547\n20260918094529\n20260918144321\n20260919005727'
+          if [[ "$versions" != "$expected" ]]; then
+            echo "Historical v16 migration boundary changed"
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected" "$versions"
+            exit 1
+          fi
+
+          run_zero_rows() {
+            local file="$1"
+            local out
+            out="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -f "$file")"
+            if [[ -n "$out" ]]; then
+              echo "Verifier returned mismatch rows: $file"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "PASS: $file"
+          }
+
+          v16_sha="3816f87f32663eb3f4ef9edd8155038d70bae1ce"
+          git cat-file -e "$v16_sha^{commit}"
+          cmp <(git show "$v16_sha:supabase/verify/attendance_teacher_management_v16_contract.sql") \
+              supabase/verify/attendance_teacher_management_v16_contract.sql
+          git show "$v16_sha:supabase/verify/attendance_security_access_contract.sql" \
+            > /tmp/attendance_security_access_contract_v16.sql
+
+          run_zero_rows supabase/verify/attendance_contract.sql
+          run_zero_rows /tmp/attendance_security_access_contract_v16.sql
+          run_zero_rows supabase/verify/attendance_student_movement_v15_contract.sql
+          run_zero_rows supabase/verify/attendance_teacher_management_v16_contract.sql
+
+      - name: Stop historical v16 security stack
+        if: always()
+        run: supabase stop --workdir .phase7b-v16-security --no-backup

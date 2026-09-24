@@ -126,6 +126,14 @@ The same exact Phase 7 release-candidate SHA must pass:
 
 All repository Attendance public RPC definitions required by the frontend/reporting stack must remain represented in repository SQL. No frontend direct-table access may be introduced.
 
+Historical verifier rule for Phase 7B:
+
+- a verifier whose assertions encode a deliberately superseded migration state must run at the migration boundary it was written to prove, not against the latest schema;
+- `attendance_teacher_management_v16_contract.sql` is therefore validated against an isolated stack ending exactly at v16 `20260919005727 attendance_v16_teacher_management_write_boundary`;
+- the current v16 teacher-management verifier must remain byte-identical to signed v16 checkpoint `3816f87f32663eb3f4ef9edd8155038d70bae1ce`; if a companion verifier has legitimately evolved after v16, the historical workflow may pin that companion to its signed-v16 bytes rather than rewriting or weakening the v16 assertion;
+- current Phase 4B1V/Phase 5A validation remains latest-v20 validation and uses the post-v17 teacher-role contract for current role semantics;
+- historical assertions must not be edited merely to make them pass against later migrations.
+
 ## Live read-only backend seal
 
 Before Phase 7 closure, production must be checked read-only for:
@@ -191,7 +199,7 @@ Freeze this contract and the canonical roadmap. No runtime or production change.
 
 ### 7B — Full Automated QA
 
-Run all five hard gates and all database verifiers on one exact candidate SHA. Record exact workflow/job evidence and resolve any unexplained failure without weakening assertions.
+Run all five current hard gates on one exact candidate SHA. Run current-schema database verifiers against the latest reconstructed v20 stack, and run any deliberately superseded historical verifier at its frozen migration boundary on that same repository SHA. Record exact workflow/job evidence and resolve any unexplained failure without weakening assertions.
 
 ### 7C — Live Read-only Equivalence Seal
 

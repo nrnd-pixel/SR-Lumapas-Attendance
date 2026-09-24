@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/phase4b1v-local-db-validation.yml'
+      - '.github/workflows/phase7b-historical-v16-boundary.yml'
       - 'supabase/baseline/**'
       - 'supabase/migrations/**'
       - 'supabase/fixtures/**'
