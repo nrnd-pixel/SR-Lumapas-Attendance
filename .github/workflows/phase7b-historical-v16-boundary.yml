@@ -30,6 +30,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -72,6 +74,11 @@ jobs:
             sudo apt-get install -y postgresql-client
           }
 
+          v16_sha="3816f87f32663eb3f4ef9edd8155038d70bae1ce"
+          git cat-file -e "$v16_sha^{commit}"
+          cmp <(git show "$v16_sha:supabase/verify/attendance_teacher_management_v16_contract.sql") \
+              supabase/verify/attendance_teacher_management_v16_contract.sql
+
           versions="$(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 -c \
             "select version from supabase_migrations.schema_migrations order by version;")"
           expected=$'20260913000000\n20260917090547\n20260918094529\n20260918144321\n20260919005727'
@@ -109,6 +116,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -173,8 +182,15 @@ jobs:
             echo "PASS: $file"
           }
 
+          v16_sha="3816f87f32663eb3f4ef9edd8155038d70bae1ce"
+          git cat-file -e "$v16_sha^{commit}"
+          cmp <(git show "$v16_sha:supabase/verify/attendance_teacher_management_v16_contract.sql") \
+              supabase/verify/attendance_teacher_management_v16_contract.sql
+          git show "$v16_sha:supabase/verify/attendance_security_access_contract.sql" \
+            > /tmp/attendance_security_access_contract_v16.sql
+
           run_zero_rows supabase/verify/attendance_contract.sql
-          run_zero_rows supabase/verify/attendance_security_access_contract.sql
+          run_zero_rows /tmp/attendance_security_access_contract_v16.sql
           run_zero_rows supabase/verify/attendance_student_movement_v15_contract.sql
           run_zero_rows supabase/verify/attendance_teacher_management_v16_contract.sql
 
