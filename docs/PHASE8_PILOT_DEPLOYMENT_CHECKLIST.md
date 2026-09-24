@@ -93,16 +93,55 @@ Recorded hosted Auth configuration currently allows production under:
 
 Therefore a separate pilot hostname will require that **exact pilot origin** to be added to Supabase Auth Redirect URLs before real hosted signup/recovery can be validated there.
 
+After Netlify assigns the stable pilot project hostname, add only this exact redirect entry:
+
+`https://<pilot-site>.netlify.app/`
+
+The current frontend always requests the site root as `redirectTo`, so a broad Netlify wildcard is not required for this manual pilot. Use the pilot project's stable primary `.netlify.app` URL for hosted Auth testing rather than ephemeral deploy-specific URLs.
+
 Rules:
 
 - do not replace the production Site URL;
 - do not remove the production redirect;
-- add only the exact pilot origin/pattern needed;
+- add only the exact pilot root URL shown above after the real hostname is known;
 - capture the pre-change Auth redirect state;
 - verify the post-change state;
 - remove the pilot redirect after pilot rollback/closure if no longer needed.
 
 The connected Supabase tools do not currently provide an authoritative hosted Auth-config read/write surface for this setting, so Dashboard evidence is required.
+
+## Manual deployment package
+
+Do **not** drag the whole GitHub repository into Netlify.
+
+The signed pilot source root also contains `.github/`, `docs/`, `supabase/`, `tests/`, README files, and the cleanup roadmap. Those files are not needed by the browser runtime and should not be published by the pilot site.
+
+Create a **minimal pre-built pilot folder** from exact pilot SHA `dc8e29bbf727c1d4dacf9ad7986e28f450b75718` containing only:
+
+- `index.html` — exact blob from the pilot SHA;
+- `assets/js/` — all 15 JavaScript modules, exact blobs from the pilot SHA;
+- `_headers` — deployment-only Netlify header file reproducing the current `netlify.toml` header policy.
+
+The deployment-only `_headers` file should be:
+
+```text
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  Cache-Control: no-store
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src https://rojetehazryfpcxlwtbi.supabase.co wss://rojetehazryfpcxlwtbi.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none';
+```
+
+Why this packaging is preferred:
+
+- it preserves the exact application/runtime bytes from the reviewed pilot SHA;
+- it avoids publishing repository-only QA, SQL, docs and CI material;
+- it avoids Git linkage/continuous deployment;
+- it preserves the existing response-header policy through Netlify's publish-directory `_headers` mechanism;
+- it keeps rollback operational: the pilot project can be disabled/ignored without touching production v0.7.
+
+Before upload, verify the runtime-file hashes/blobs against the pilot SHA and record the package manifest. The generated `_headers` file is a deployment artifact, not a runtime-source change and should not be committed to the pilot branch unless later design explicitly chooses to do so.
 
 ## Netlify prerequisite
 
@@ -111,10 +150,13 @@ Most recent authoritative Dashboard evidence recorded in the roadmap states the 
 Before deployment, confirm in Netlify that:
 
 - the production site remains unlinked from GitHub;
-- the new pilot site is a separate site/project;
-- the pilot site uses the exact pilot source;
+- the new pilot site is a separate site/project created by **Deploy manually / drag and drop**, not by linking this Git repository;
+- the upload is the minimal pre-built package described above;
+- the pilot site receives its own `.netlify.app` hostname;
 - no production domain/alias points to the pilot;
 - no automatic production deployment is enabled.
+
+Within the separate pilot Netlify project, a manual upload is that pilot project's published deploy. That is acceptable because the project itself is the staging boundary; it must never carry the production `srlumapas.netlify.app` domain.
 
 No assumption about current Netlify account-level linkage should be made from repository state alone.
 
