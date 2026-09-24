@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/phase5a-security-validation.yml'
+      - '.github/workflows/phase7b-historical-v16-boundary.yml'
       - 'supabase/baseline/**'
       - 'supabase/migrations/**'
       - 'supabase/fixtures/phase4b1v_reporting_fixture.sql'
