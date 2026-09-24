@@ -107,6 +107,7 @@ jobs:
           run_zero_rows supabase/verify/attendance_contract.sql
           run_zero_rows supabase/verify/attendance_security_access_contract.sql
           run_zero_rows supabase/verify/attendance_student_movement_v15_contract.sql
+          run_zero_rows supabase/verify/attendance_teacher_management_v16_contract.sql
           run_zero_rows supabase/verify/attendance_teacher_role_v17_contract.sql
           run_zero_rows supabase/verify/attendance_structural_write_v18_contract.sql
           run_zero_rows supabase/verify/attendance_fk_index_v19_contract.sql
