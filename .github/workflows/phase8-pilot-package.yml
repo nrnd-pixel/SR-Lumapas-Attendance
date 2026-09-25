@@ -21,7 +21,7 @@ jobs:
       ARTIFACT_NAME: phase8-pilot-package-dc8e29bb
     steps:
       - name: Check out exact frozen pilot source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: dc8e29bbf727c1d4dacf9ad7986e28f450b75718
           fetch-depth: 1
@@ -127,7 +127,7 @@ jobs:
 
       - name: Upload exact pilot package artifact
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: phase8-pilot-package/
