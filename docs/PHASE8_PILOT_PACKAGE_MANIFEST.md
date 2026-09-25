@@ -139,6 +139,28 @@ Before the manual Netlify upload:
 
 Supabase requires the requested `redirectTo` URL to match the configured Redirect URLs list and recommends exact redirect paths for stable production-style URLs. Official references: `https://supabase.com/docs/guides/auth/redirect-urls` and `https://supabase.com/docs/guides/local-development/cli/config`.
 
+## Automated package builder
+
+Repository workflow: `.github/workflows/phase8-pilot-package.yml`
+
+The workflow is intentionally packaging-only:
+
+- repository permission is `contents: read`;
+- it requires no repository or Supabase secrets;
+- it checks out frozen runtime SHA `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`, not the workflow/PR head;
+- it requires that exact checkout SHA;
+- it verifies all 17 reviewed Git blob SHAs listed in this manifest;
+- it verifies exactly 16 JavaScript modules;
+- it verifies frozen `netlify.toml` blob `738c5f0b492f8a2b8a2e6c2857e95f0acaac87b9`;
+- it assembles only `index.html`, `assets/js/*.js`, and generated `_headers`;
+- it requires 18 deployment files total;
+- it rejects repository-only QA/docs/SQL/config paths from the package;
+- it prints per-file SHA-256 values into the Actions job summary;
+- it uploads artifact `phase8-pilot-package-dc8e29bb` with 30-day retention;
+- `actions/upload-artifact@v4` records an artifact-level SHA-256 digest in the job summary.
+
+The uploaded artifact is a package candidate only. It must be inspected before any manual Netlify upload.
+
 ## Status
 
-Manifest prepared. No package has been uploaded to Netlify, no Supabase Auth redirect has been changed, and production v0.7 remains untouched.
+Package-builder implementation prepared on a focused CI branch. No package has been uploaded to Netlify, no Supabase Auth redirect has been changed, and production v0.7 remains untouched.
