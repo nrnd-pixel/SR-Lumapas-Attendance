@@ -86,7 +86,7 @@ Create this file in the root of the manual Netlify upload folder:
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src https://rojetehazryfpcxlwtbi.supabase.co wss://rojetehazryfpcxlwtbi.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none';
 ```
 
-Netlify documents `_headers` as a supported publish-directory mechanism for custom response headers. citeturn274492search0turn274492search2
+Netlify documents `_headers` as a supported publish-directory mechanism for custom response headers. Official references: `https://docs.netlify.com/manage/routing/headers/` and `https://docs.netlify.com/build/configure-builds/file-based-configuration/`.
 
 ## Expected manual package tree
 
@@ -137,7 +137,7 @@ Before the manual Netlify upload:
 6. then add only the exact pilot root to Supabase Auth Redirect URLs:
    `https://<pilot-site>.netlify.app/`
 
-Supabase requires the requested `redirectTo` URL to match the configured Redirect URLs list and recommends exact redirect paths for stable production-style URLs. citeturn274492search1turn274492search3
+Supabase requires the requested `redirectTo` URL to match the configured Redirect URLs list and recommends exact redirect paths for stable production-style URLs. Official references: `https://supabase.com/docs/guides/auth/redirect-urls` and `https://supabase.com/docs/guides/local-development/cli/config`.
 
 ## Status
 
