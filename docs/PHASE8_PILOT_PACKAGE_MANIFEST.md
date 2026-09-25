@@ -157,7 +157,7 @@ The workflow is intentionally packaging-only:
 - it rejects repository-only QA/docs/SQL/config paths from the package;
 - it prints per-file SHA-256 values into the Actions job summary;
 - it uploads artifact `phase8-pilot-package-dc8e29bb` with 30-day retention;
-- `actions/upload-artifact@v4` records an artifact-level SHA-256 digest in the job summary.
+- pinned `actions/upload-artifact` v7.0.1 records an artifact-level SHA-256 digest in the job summary; `actions/checkout` is likewise pinned to v7.0.1 by immutable commit SHA.
 
 The uploaded artifact is a package candidate only. It must be inspected before any manual Netlify upload.
 
