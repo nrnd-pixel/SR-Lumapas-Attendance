@@ -1,0 +1,147 @@
+name: Phase 8 Pilot Package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/phase8-pilot-package.yml"
+      - "ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md"
+      - "docs/PHASE8_PILOT_DEPLOYMENT_CHECKLIST.md"
+      - "docs/PHASE8_PILOT_PACKAGE_MANIFEST.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: frozen-runtime-package
+    runs-on: ubuntu-latest
+    env:
+      PILOT_SHA: dc8e29bbf727c1d4dacf9ad7986e28f450b75718
+      ARTIFACT_NAME: phase8-pilot-package-dc8e29bb
+    steps:
+      - name: Check out exact frozen pilot source
+        uses: actions/checkout@v4
+        with:
+          ref: dc8e29bbf727c1d4dacf9ad7986e28f450b75718
+          fetch-depth: 1
+
+      - name: Verify exact frozen source and reviewed blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          actual_head="$(git rev-parse HEAD)"
+          test "$actual_head" = "$PILOT_SHA"
+
+          declare -A expected=(
+            ["index.html"]="e3502e0e4c32c00e89c7d06764c72b1b135f18fc"
+            ["assets/js/admin-dashboard.js"]="5c955e8c6bceaa329236a2801b7b2f697d298299"
+            ["assets/js/app-bootstrap.js"]="a5ed551751ab399531866641b2b93525ce752af2"
+            ["assets/js/app-navigation.js"]="b10f8e6aaf66a7a134247902a378ccc21fddfa3b"
+            ["assets/js/app-state.js"]="6e491cf10d9413d1a484cbac15f01d1d9451ee72"
+            ["assets/js/attendance-register.js"]="86da0eb3ad45a510926a06173b3a14dbf485cae1"
+            ["assets/js/auth-session.js"]="a97e357e3bec0740ef8587d1f933739d25e7a114"
+            ["assets/js/date-helpers.js"]="82b76b7c4d208a04b4fd40ceabd31fbcd7151196"
+            ["assets/js/main.js"]="a384b6637b2fec4c916735b339295bc28c9fe460"
+            ["assets/js/period-reports.js"]="43c873428186571ece9caaa4bae73e1573718230"
+            ["assets/js/reporting-population.js"]="816d5421ad530112d9d367ad367e762d32191541"
+            ["assets/js/statistics.js"]="34fda80ad3de0dae30aa4bb68cfc472a61a7285d"
+            ["assets/js/student-management.js"]="21e19bb38bc2f8c0137758976f8019c63ac824bc"
+            ["assets/js/supabase-client.js"]="82741fd1d72301b83e37e16a9bdd15048455d8ae"
+            ["assets/js/teacher-access.js"]="594903f1d53bbb0d3b5ece2f7af4662c5fe70ecd"
+            ["assets/js/teacher-admin.js"]="a9fc2493a0af073a887c3af364f8bc6a2e044d25"
+            ["assets/js/ui-helpers.js"]="6b52195b08e7612fc9871f3e907a2f0e7844a81c"
+          )
+
+          test "${#expected[@]}" -eq 17
+
+          for path in "${!expected[@]}"; do
+            test -f "$path"
+            actual_blob="$(git hash-object "$path")"
+            if [ "$actual_blob" != "${expected[$path]}" ]; then
+              echo "Blob mismatch: $path expected=${expected[$path]} actual=$actual_blob" >&2
+              exit 1
+            fi
+          done
+
+          js_count="$(find assets/js -maxdepth 1 -type f -name '*.js' | wc -l | tr -d ' ')"
+          test "$js_count" -eq 16
+
+          netlify_blob="$(git hash-object netlify.toml)"
+          test "$netlify_blob" = "738c5f0b492f8a2b8a2e6c2857e95f0acaac87b9"
+
+          echo "Frozen source: $actual_head"
+          echo "Reviewed source files: ${#expected[@]}"
+          echo "JavaScript modules: $js_count"
+          echo "netlify.toml blob: $netlify_blob"
+
+      - name: Assemble minimal pilot package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_dir="phase8-pilot-package"
+          mkdir -p "$package_dir/assets/js"
+
+          cp index.html "$package_dir/index.html"
+          cp assets/js/*.js "$package_dir/assets/js/"
+
+          cat > "$package_dir/_headers" <<'EOF'
+          /*
+            X-Content-Type-Options: nosniff
+            Referrer-Policy: no-referrer
+            X-Frame-Options: DENY
+            Cache-Control: no-store
+            Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src https://rojetehazryfpcxlwtbi.supabase.co wss://rojetehazryfpcxlwtbi.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none';
+          EOF
+
+          reviewed_count="$(find "$package_dir" -type f ! -name '_headers' | wc -l | tr -d ' ')"
+          total_count="$(find "$package_dir" -type f | wc -l | tr -d ' ')"
+          js_count="$(find "$package_dir/assets/js" -maxdepth 1 -type f -name '*.js' | wc -l | tr -d ' ')"
+
+          test "$reviewed_count" -eq 17
+          test "$js_count" -eq 16
+          test "$total_count" -eq 18
+
+          forbidden="$(
+            find "$package_dir" -type f \(               -path '*/.github/*' -o               -path '*/docs/*' -o               -path '*/supabase/*' -o               -path '*/tests/*' -o               -name 'ATTENDANCE_TECH_DEBT_CLEANUP_ROADMAP.md' -o               -name 'README*' -o               -name 'netlify.toml'             \) -print
+          )"
+          test -z "$forbidden"
+
+          (
+            cd "$package_dir"
+            find . -type f -print0 | sort -z | xargs -0 sha256sum
+          ) | tee phase8-pilot-package.SHA256SUMS.txt
+
+          echo "## Phase 8 pilot package" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Frozen runtime SHA: $PILOT_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reviewed source files: 17" >> "$GITHUB_STEP_SUMMARY"
+          echo "- JavaScript modules: 16" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deployment files including _headers: 18" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact payload directory: phase8-pilot-package/" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### File SHA-256" >> "$GITHUB_STEP_SUMMARY"
+          cat phase8-pilot-package.SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact pilot package artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: phase8-pilot-package/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Record artifact digest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Uploaded artifact" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Name: $ARTIFACT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact ID: ${{ steps.upload.outputs.artifact-id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact digest: ${{ steps.upload.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"
