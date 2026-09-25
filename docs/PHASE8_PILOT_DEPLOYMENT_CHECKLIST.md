@@ -141,7 +141,7 @@ Why this packaging is preferred:
 - it preserves the existing response-header policy through Netlify's publish-directory `_headers` mechanism;
 - it keeps rollback operational: the pilot project can be disabled/ignored without touching production v0.7.
 
-Before upload, verify the runtime-file Git blob SHAs against the pilot SHA using `docs/PHASE8_PILOT_PACKAGE_MANIFEST.md` and require exactly 17 reviewed source files plus the generated `_headers` file. The generated `_headers` file is a deployment artifact, not a runtime-source change and should not be committed to the pilot branch unless later design explicitly chooses to do so.
+Before upload, verify the runtime-file Git blob SHAs against the pilot SHA using `docs/PHASE8_PILOT_PACKAGE_MANIFEST.md` and require exactly 17 reviewed source files plus the generated `_headers` file. Prefer the repository `Phase 8 Pilot Package` workflow for this assembly so the frozen SHA, Git blob SHAs, 16-module count, 18-file deployment payload, SHA-256 listing, and uploaded artifact digest are machine-verified before manual Netlify use. The generated `_headers` file is a deployment artifact, not a runtime-source change and should not be committed to the pilot branch unless later design explicitly chooses to do so.
 
 ## Netlify prerequisite
 
