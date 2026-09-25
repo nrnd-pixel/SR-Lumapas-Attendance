@@ -119,7 +119,7 @@ The signed pilot source root also contains `.github/`, `docs/`, `supabase/`, `te
 Create a **minimal pre-built pilot folder** from exact pilot SHA `dc8e29bbf727c1d4dacf9ad7986e28f450b75718` containing only:
 
 - `index.html` — exact blob from the pilot SHA;
-- `assets/js/` — all 15 JavaScript modules, exact blobs from the pilot SHA;
+- `assets/js/` — all 16 JavaScript modules, exact blobs from the pilot SHA;
 - `_headers` — deployment-only Netlify header file reproducing the current `netlify.toml` header policy.
 
 The deployment-only `_headers` file should be:
@@ -141,7 +141,7 @@ Why this packaging is preferred:
 - it preserves the existing response-header policy through Netlify's publish-directory `_headers` mechanism;
 - it keeps rollback operational: the pilot project can be disabled/ignored without touching production v0.7.
 
-Before upload, verify the runtime-file hashes/blobs against the pilot SHA and record the package manifest. The generated `_headers` file is a deployment artifact, not a runtime-source change and should not be committed to the pilot branch unless later design explicitly chooses to do so.
+Before upload, verify the runtime-file Git blob SHAs against the pilot SHA using `docs/PHASE8_PILOT_PACKAGE_MANIFEST.md` and require exactly 17 reviewed source files plus the generated `_headers` file. The generated `_headers` file is a deployment artifact, not a runtime-source change and should not be committed to the pilot branch unless later design explicitly chooses to do so.
 
 ## Netlify prerequisite
 
