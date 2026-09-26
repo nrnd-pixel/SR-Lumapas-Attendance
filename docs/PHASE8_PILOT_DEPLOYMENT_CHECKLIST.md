@@ -1,7 +1,8 @@
 # Phase 8 — Cleaned v1.0 Pilot Deployment Checklist
 
-**Date:** 25 Sep 2026  
-**Signed source `main`:** `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`  
+**Date:** 26 Sep 2026  
+**Repository `main` before Phase 8B closure:** `c69b566ec1a52564b7ba4876c4cbda9d9b69d00c`  
+**Frozen pilot runtime source:** `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`  
 **Exact pilot branch:** `pilot/phase-8-cleaned-v1-preview`  
 **Pilot branch SHA:** `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`  
 **Branch drift:** 0 commits ahead / 0 behind; zero changed files.
@@ -13,6 +14,22 @@ Phase 8 is a controlled pilot of the cleaned v1.0 frontend against the already-r
 The pilot is **not** production promotion.
 
 Protected production v0.7 at `https://srlumapas.netlify.app/` must remain available and unchanged throughout the pilot.
+
+## Current live pilot evidence — 26 Sep 2026
+
+- Pilot hostname: `https://srlumapasattend.netlify.app/`.
+- Pilot source: frozen runtime SHA `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`.
+- Package source: PR #113 verified artifact ID `10845945617`, SHA-256 `636505ee8764cbe2e2d5c4dc046a754d40638031a93dd3f3bc4f07240d622498`.
+- Pre-pilot user-provided Netlify Dashboard evidence: production project `srlumapas` showed `Current repository: Not linked`.
+- User-provided browser evidence: pilot is public and renders the expected Teacher Sign In screen.
+- User-confirmed hosted Auth change: exact pilot root was added under Supabase Auth Redirect URLs. Connected tools cannot independently read this hosted Auth setting.
+- Stage 8B password recovery: **PASS (user-confirmed live-system evidence)**. Recovery email returned to pilot; Set New Password retained priority; confirmation mismatch was rejected; valid password update succeeded; recovery session signed out; normal sign-in was required and succeeded.
+- Fresh read-only Supabase sanity check after the Auth test: latest Attendance migration remains v20; 15 active classes / 319 active pupils / 319 active enrolments / 0 student movements / 137 registers / 3,425 attendance records / 3,425 audit rows.
+- Known residual: `attendance_private.attendance_record_audit` remains RLS-disabled, but direct privilege checks show both `anon` and `authenticated` still lack private-schema USAGE and audit-table SELECT.
+- Broader Stage 8A read-only/navigation/reporting coverage is not yet fully recorded.
+- Stage 8C limited real operations: **not started**.
+- Stage 8D async-risk stress checks: **not started**.
+
 
 ## Pilot deployment boundary
 
@@ -164,6 +181,8 @@ No assumption about current Netlify account-level linkage should be made from re
 
 ### Stage 8A — Deployment smoke/read-only
 
+**Status:** partially evidenced; public pilot load and successful normal sign-in are confirmed, but the full read-only/navigation/reporting matrix below remains to be completed.
+
 Use the separate pilot URL.
 
 Verify:
@@ -186,6 +205,8 @@ Stop on any unexplained difference.
 
 ### Stage 8B — Hosted Auth flows
 
+**Status:** PASS on 26 Sep 2026 for password recovery, based on user-confirmed real hosted testing. Teacher signup email-confirmation return remains available for pilot observation if a genuine signup occurs; do not fabricate a teacher account solely to satisfy the checklist.
+
 Only after the exact pilot origin is allow-listed.
 
 Verify:
@@ -203,6 +224,8 @@ Verify:
 Do not alter the production Site URL or password-policy settings for these tests.
 
 ### Stage 8C — Limited real operational pilot
+
+**Status:** not started; separate approval required.
 
 Use only genuine school operations.
 
@@ -227,6 +250,8 @@ Do **not** fabricate correction, transfer, or teacher-management events solely t
 If a genuine correction/transfer/approval occurs during the pilot, verify its intended audit/history behavior and record sanitized evidence only.
 
 ### Stage 8D — Known async-risk stress checks
+
+**Status:** not started.
 
 These three inherited risks were not silently fixed and must be exercised manually:
 
@@ -310,4 +335,4 @@ Phase 8 is complete only when:
 - rollback remains clear;
 - user explicitly approves moving to Phase 9.
 
-**Current status:** repository setup prepared; deployment has not started.
+**Current status:** separate cleaned-v1.0 pilot is deployed and Phase 8B hosted password recovery has passed. Phase 8C and Phase 8D remain unstarted; Phase 9 promotion is not authorized.
