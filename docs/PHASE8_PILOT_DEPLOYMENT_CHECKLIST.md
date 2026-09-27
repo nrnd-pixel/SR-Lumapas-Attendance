@@ -251,15 +251,30 @@ If a genuine correction/transfer/approval occurs during the pilot, verify its in
 
 ### Stage 8D — Known async-risk stress checks
 
-**Status:** not started.
+**Status:** Phase 8D1 deterministic characterization complete on 27 Sep 2026; all three inherited races are reproducible. Phase 8D2 fixes are pending.
 
-These three inherited risks were not silently fixed and must be exercised manually:
+Characterization evidence:
 
-1. rapidly refresh/re-enter Student Management so an older `attendance_admin_student_roster` response cannot visibly replace newer state;
-2. rapidly refresh/re-enter Teacher Admin around approval/enable-disable activity so older results do not visibly overwrite newer state;
-3. repeatedly trigger Check Approval / access checks and confirm an older unauthorized response does not visibly replace a newer authorized app state.
+- draft PR #116 exact head: `bb05ff22533bd3bc710e317e7fef8c7d32de7178`;
+- Phase 0A `36315791608`: PASS;
+- Phase 0B `36315791581`: PASS;
+- Playwright `36315791571`: 68 tests, exactly 3 failed / 65 passed;
+- the three failing tests are new desired-behavior assertions only; no pre-existing regression failed.
 
-Any reproducible stale-state issue is a pilot finding and must be corrected in a separate focused Phase 8 branch/PR before promotion.
+Confirmed defects:
+
+1. **Student Management:** a deferred older `attendance_admin_student_roster` response can overwrite a newer refresh. The deterministic test rendered 2 current pupils from the newer response, released the older response, then observed `#studentAdminCount` regress to `1 current pupils`.
+2. **Teacher Admin:** deferred older `attendance_admin_teacher_requests` + `attendance_admin_teachers` responses can overwrite a newer refresh. The deterministic test rendered 0 pending / 1 active, released the older pair, then observed `#pendingTeacherCount` regress to `1`.
+3. **Check Approval/access routing:** a newer authorized `attendance_teacher_status` response can enter the app, then an older unauthorized response can finish later and route the UI back to the teacher gate. The deterministic test observed `#appView` become hidden after the stale result was released.
+
+Rules for Phase 8D2:
+
+- keep these three regressions unchanged as the acceptance contract;
+- do not hide the races with retries, sleeps, skips, or assertions of current buggy behavior;
+- implement the smallest request-order/in-flight protection in the owning frontend modules;
+- no RPC/SQL/Auth/Science change is expected;
+- require 68/68 Playwright plus relevant hard gates;
+- because runtime bytes will change, create a new exact-SHA pilot package/deploy and re-run focused hosted smoke/recovery before relying on later Phase 8C evidence.
 
 ## Evidence to collect
 
@@ -335,4 +350,4 @@ Phase 8 is complete only when:
 - rollback remains clear;
 - user explicitly approves moving to Phase 9.
 
-**Current status:** separate cleaned-v1.0 pilot is deployed and Phase 8B hosted password recovery has passed. Phase 8C and Phase 8D remain unstarted; Phase 9 promotion is not authorized.
+**Current status:** separate cleaned-v1.0 pilot is deployed and Phase 8B hosted password recovery has passed. Phase 8D1 characterization has now reproduced all three known async races; Phase 8D2 runtime fixes are required. Phase 8C genuine attendance remains unstarted. Phase 9 promotion is not authorized.
