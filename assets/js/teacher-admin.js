@@ -1,4 +1,4 @@
-import { state } from './app-state.js';
+import { state, beginRequest, isLatestRequest } from './app-state.js';
 import { $, esc } from './ui-helpers.js';
 
 let sb;
@@ -12,8 +12,10 @@ export function initTeacherAdmin(client,helpers){
 }
 
 export async function loadAdminTeachers(){
+  const serial=beginRequest('adminTeachers');
   showAdminMsg('teacherAdminMsg','Loading teacher access…','info');
   const [rq,tr]=await Promise.all([sb.rpc('attendance_admin_teacher_requests',{p_status:'pending'}),sb.rpc('attendance_admin_teachers')]);
+  if(!isLatestRequest('adminTeachers',serial))return;
   if(rq.error||tr.error){showAdminMsg('teacherAdminMsg',(rq.error||tr.error).message,'warn');return;}
   state.teacherRequests=rq.data||[];state.teachers=tr.data||[];$('teacherAdminMsg').classList.add('hidden');renderTeachers();
 }

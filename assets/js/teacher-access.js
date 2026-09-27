@@ -1,4 +1,4 @@
-import { state } from './app-state.js';
+import { state, beginRequest, isLatestRequest } from './app-state.js';
 import { $, esc, fillGroupedClasses } from './ui-helpers.js';
 import { authErrorMessage, hideEntryViews, showLogin } from './auth-session.js';
 
@@ -84,17 +84,27 @@ async function prepareGateRequest(req,userId){
 }
 
 export async function ensureTeacherAccess(){
+  const serial=beginRequest('teacherAccess');
   let status;
   const statusResp=await sb.rpc('attendance_teacher_status');
+  if(!isLatestRequest('teacherAccess',serial))return;
   if(statusResp.error){showLogin();$('loginMsg').textContent='Could not check teacher access: '+statusResp.error.message;return;}
   status=statusResp.data;state.teacherStatus=status;
   if(!status.authorized){
     const pending=pendingSignupForUser(status?.user_id);
     if(pending && !status.signup_request){
-      try{await submitTeacherRequest(pending.name,pending.classId,pending.role);clearPendingSignupForUser(status?.user_id);
-        const fresh=await sb.rpc('attendance_teacher_status');if(!fresh.error)status=fresh.data;
-      }catch(e){}
+      try{
+        await submitTeacherRequest(pending.name,pending.classId,pending.role);
+        if(!isLatestRequest('teacherAccess',serial))return;
+        clearPendingSignupForUser(status?.user_id);
+        const fresh=await sb.rpc('attendance_teacher_status');
+        if(!isLatestRequest('teacherAccess',serial))return;
+        if(!fresh.error)status=fresh.data;
+      }catch(e){
+        if(!isLatestRequest('teacherAccess',serial))return;
+      }
     }
+    if(!isLatestRequest('teacherAccess',serial))return;
     if(status.signup_request)clearPendingSignupForUser(status?.user_id);
     await showTeacherGate(status);return;
   }

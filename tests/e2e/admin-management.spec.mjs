@@ -487,3 +487,87 @@ test('teacher admin escapes hostile request and teacher text while approval cont
   });
   await harness.expectNoProductionRequests();
 });
+
+test('older Student Management roster response cannot overwrite a newer refresh', async ({ page }) => {
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_student_roster: [
+        { __defer: 'students-old', response: roster([pupilA]) },
+        roster([pupilA, pupilB])
+      ]
+    }
+  });
+
+  await page.locator('#studentsTabBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('students-old');
+
+  await page.locator('#refreshStudentsBtn').click();
+  await expect(page.locator('#studentAdminCount')).toHaveText('2 current pupils');
+  await expect(page.locator('#adminStudentList')).toContainText(pupilB.full_name);
+
+  await harness.releaseRpc('students-old');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+  await expect(page.locator('#studentAdminCount')).toHaveText('2 current pupils');
+  await expect(page.locator('#adminStudentList')).toContainText(pupilB.full_name);
+
+  const calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_admin_student_roster')).toHaveLength(2);
+  await harness.expectNoProductionRequests();
+});
+
+test('older Teacher Admin response cannot overwrite a newer refresh', async ({ page }) => {
+  const oldRequest = teacherRequest({
+    request_id: 'request-old-race',
+    full_name: 'Older Pending Teacher',
+    email: 'older.pending@example.test'
+  });
+  const freshTeacher = teacher({
+    userId: 'teacher-fresh-race',
+    email: 'fresh.teacher@example.test',
+    active: true,
+    classCode: '3B'
+  });
+
+  const harness = await openAuthorized(page, {
+    admin: true,
+    classes,
+    extraRpc: {
+      attendance_admin_teacher_requests: [
+        { __defer: 'teachers-old-requests', response: { data: [oldRequest], error: null } },
+        { data: [], error: null }
+      ],
+      attendance_admin_teachers: [
+        { __defer: 'teachers-old-list', response: { data: [], error: null } },
+        { data: [freshTeacher], error: null }
+      ]
+    }
+  });
+
+  await page.locator('#teachersTabBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toEqual(
+    expect.arrayContaining(['teachers-old-requests', 'teachers-old-list'])
+  );
+
+  await page.locator('#refreshTeachersBtn').click();
+  await expect(page.locator('#pendingTeacherCount')).toHaveText('0');
+  await expect(page.locator('#activeTeacherCount')).toHaveText('1');
+  await expect(page.locator('#teacherList')).toContainText(freshTeacher.email);
+
+  await harness.releaseRpc('teachers-old-requests');
+  await harness.releaseRpc('teachers-old-list');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+  await expect(page.locator('#pendingTeacherCount')).toHaveText('0');
+  await expect(page.locator('#activeTeacherCount')).toHaveText('1');
+  await expect(page.locator('#teacherList')).toContainText(freshTeacher.email);
+  await expect(page.locator('#teacherRequestList')).not.toContainText(oldRequest.email);
+
+  const calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_admin_teacher_requests')).toHaveLength(2);
+  expect(calls.rpc.filter(call => call.name === 'attendance_admin_teachers')).toHaveLength(2);
+  await harness.expectNoProductionRequests();
+});
+
