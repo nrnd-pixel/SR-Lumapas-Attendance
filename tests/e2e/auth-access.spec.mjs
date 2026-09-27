@@ -742,3 +742,53 @@ test('authorized account with no assigned classes warns and does not load a regi
   ]);
   await harness.expectNoProductionRequests();
 });
+
+test('older unauthorized Check Approval response cannot replace a newer authorized app state', async ({ page }) => {
+  const pending = {
+    status: 'pending',
+    full_name: 'Synthetic Pending Teacher',
+    requested_class_id: 'class-3a',
+    requested_class_code: '3A',
+    requested_role: 'class_teacher'
+  };
+  const unauthorized = {
+    user_id: 'teacher-race',
+    authorized: false,
+    signup_request: pending
+  };
+
+  const harness = await installHarness(page, {
+    session: { user: { id: 'teacher-race', email: 'teacher.race@example.test' } },
+    rpc: {
+      attendance_teacher_status: [
+        unauthorized,
+        { __defer: 'approval-old', response: unauthorized },
+        { user_id: 'teacher-race', authorized: true, signup_request: null }
+      ],
+      attendance_bootstrap: bootstrapFixture(),
+      attendance_load_register: registerFixture()
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#teacherGateView')).toBeVisible();
+  await expect(page.locator('#gateStatus')).toContainText('Pending admin approval');
+
+  await page.locator('#checkApprovalBtn').click();
+  await expect.poll(() => harness.pendingRpcLabels()).toContain('approval-old');
+
+  await page.locator('#checkApprovalBtn').click();
+  await expect(page.locator('#appView')).toBeVisible();
+  await expect(page.locator('#teacherGateView')).toBeHidden();
+
+  await harness.releaseRpc('approval-old');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+  await expect(page.locator('#appView')).toBeVisible();
+  await expect(page.locator('#teacherGateView')).toBeHidden();
+
+  const calls = await harness.calls();
+  expect(calls.rpc.filter(call => call.name === 'attendance_teacher_status')).toHaveLength(3);
+  await harness.expectNoProductionRequests();
+});
+
