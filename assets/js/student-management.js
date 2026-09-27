@@ -1,4 +1,4 @@
-import { state } from './app-state.js';
+import { state, beginRequest, isLatestRequest } from './app-state.js';
 import { bruneiToday } from './date-helpers.js';
 import { $, esc, fillGroupedClasses } from './ui-helpers.js';
 
@@ -16,8 +16,10 @@ export function initStudentManagement(client,helpers){
 
 export async function loadAdminStudents(){
   const sid=schoolId();if(!sid)return;
+  const serial=beginRequest('adminStudents');
   showAdminMsg('studentManageMsg','Loading pupil roster…','info');
   const {data,error}=await sb.rpc('attendance_admin_student_roster',{p_school_id:sid});
+  if(!isLatestRequest('adminStudents',serial))return;
   if(error){showAdminMsg('studentManageMsg',error.message,'warn');return;}
   state.adminRoster=data;$('studentManageMsg').classList.add('hidden');$('studentAdminCount').textContent=(data.total_current||0)+' current pupils';
   fillGroupedClasses($('studentClassFilter'),data.classes||[],{blankLabel:'All classes',compact:true});
