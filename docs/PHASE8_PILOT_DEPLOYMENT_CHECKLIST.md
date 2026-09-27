@@ -251,7 +251,7 @@ If a genuine correction/transfer/approval occurs during the pilot, verify its in
 
 ### Stage 8D — Known async-risk stress checks
 
-**Status:** Phase 8D1 deterministic characterization complete on 27 Sep 2026; all three inherited races are reproducible. Phase 8D2 fixes are pending.
+**Status:** Phase 8D1 characterization and Phase 8D2 repository/runtime fixes are complete. Hosted revalidation of the fixed runtime is pending.
 
 Characterization evidence:
 
@@ -259,22 +259,27 @@ Characterization evidence:
 - Phase 0A `36315791608`: PASS;
 - Phase 0B `36315791581`: PASS;
 - Playwright `36315791571`: 68 tests, exactly 3 failed / 65 passed;
-- the three failing tests are new desired-behavior assertions only; no pre-existing regression failed.
+- the three failures were the new desired-behavior assertions only.
 
-Confirmed defects:
+Phase 8D2 fix evidence:
 
-1. **Student Management:** a deferred older `attendance_admin_student_roster` response can overwrite a newer refresh. The deterministic test rendered 2 current pupils from the newer response, released the older response, then observed `#studentAdminCount` regress to `1 current pupils`.
-2. **Teacher Admin:** deferred older `attendance_admin_teacher_requests` + `attendance_admin_teachers` responses can overwrite a newer refresh. The deterministic test rendered 0 pending / 1 active, released the older pair, then observed `#pendingTeacherCount` regress to `1`.
-3. **Check Approval/access routing:** a newer authorized `attendance_teacher_status` response can enter the app, then an older unauthorized response can finish later and route the UI back to the teacher gate. The deterministic test observed `#appView` become hidden after the stale result was released.
+- PR #118 exact head: `d060029178bdd3bab4685b3815e3605c8b4a1f3a`;
+- merged cleanup `main`: `fe0b663846f361dc88514076c51d746fda05e5e0`;
+- Phase 0A `36355556735`: PASS;
+- Phase 0B `36355556662`: PASS;
+- Playwright `36355556660`: **68/68 PASS in 29.3s**;
+- the three characterization test files/assertions were carried forward unchanged;
+- runtime guards use the existing monotonically increasing request-serial mechanism.
 
-Rules for Phase 8D2:
+Fixed behavior:
 
-- keep these three regressions unchanged as the acceptance contract;
-- do not hide the races with retries, sleeps, skips, or assertions of current buggy behavior;
-- implement the smallest request-order/in-flight protection in the owning frontend modules;
-- no RPC/SQL/Auth/Science change is expected;
-- require 68/68 Playwright plus relevant hard gates;
-- because runtime bytes will change, create a new exact-SHA pilot package/deploy and re-run focused hosted smoke/recovery before relying on later Phase 8C evidence.
+1. **Student Management:** only the newest `attendance_admin_student_roster` request may apply UI/state.
+2. **Teacher Admin:** only the newest paired teacher-request/teacher-list load may apply UI/state.
+3. **Check Approval/access routing:** stale `attendance_teacher_status` results are discarded before they can replace newer routing state, including the post-pending-signup follow-up check.
+
+No DOM ID, RPC/SQL, Auth, Science, or backend authorization change was made.
+
+**Hosted status:** the current Netlify pilot still serves old runtime `dc8e29bb…`. Do not count Stage 8D as hosted-complete until a new exact-SHA package from `fe0b6638…` is manually deployed to the separate pilot and the three interactions are re-exercised there.
 
 ## Evidence to collect
 
@@ -350,4 +355,4 @@ Phase 8 is complete only when:
 - rollback remains clear;
 - user explicitly approves moving to Phase 9.
 
-**Current status:** separate cleaned-v1.0 pilot is deployed and Phase 8B hosted password recovery has passed. Phase 8D1 characterization has now reproduced all three known async races; Phase 8D2 runtime fixes are required. Phase 8C genuine attendance remains unstarted. Phase 9 promotion is not authorized.
+**Current status:** Phase 8D2 fixes are merged and 68/68 browser tests pass on `fe0b663846f361dc88514076c51d746fda05e5e0`, but the separate hosted pilot still runs old runtime `dc8e29bb…`. A new exact-SHA package, manual pilot redeploy, and focused hosted revalidation are required before Phase 8C genuine attendance. Phase 9 promotion is not authorized.
