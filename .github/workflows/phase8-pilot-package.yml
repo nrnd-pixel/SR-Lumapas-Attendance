@@ -17,13 +17,13 @@ jobs:
     name: frozen-runtime-package
     runs-on: ubuntu-latest
     env:
-      PILOT_SHA: dc8e29bbf727c1d4dacf9ad7986e28f450b75718
-      ARTIFACT_NAME: phase8-pilot-package-dc8e29bb
+      PILOT_SHA: fe0b663846f361dc88514076c51d746fda05e5e0
+      ARTIFACT_NAME: phase8-pilot-package-fe0b6638
     steps:
       - name: Check out exact frozen pilot source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: dc8e29bbf727c1d4dacf9ad7986e28f450b75718
+          ref: fe0b663846f361dc88514076c51d746fda05e5e0
           fetch-depth: 1
 
       - name: Verify exact frozen source and reviewed blobs
@@ -39,7 +39,7 @@ jobs:
             ["assets/js/admin-dashboard.js"]="5c955e8c6bceaa329236a2801b7b2f697d298299"
             ["assets/js/app-bootstrap.js"]="a5ed551751ab399531866641b2b93525ce752af2"
             ["assets/js/app-navigation.js"]="b10f8e6aaf66a7a134247902a378ccc21fddfa3b"
-            ["assets/js/app-state.js"]="6e491cf10d9413d1a484cbac15f01d1d9451ee72"
+            ["assets/js/app-state.js"]="e9481e80940f1b6eb9f8c3c5504e950b558aa6de"
             ["assets/js/attendance-register.js"]="86da0eb3ad45a510926a06173b3a14dbf485cae1"
             ["assets/js/auth-session.js"]="a97e357e3bec0740ef8587d1f933739d25e7a114"
             ["assets/js/date-helpers.js"]="82b76b7c4d208a04b4fd40ceabd31fbcd7151196"
@@ -47,10 +47,10 @@ jobs:
             ["assets/js/period-reports.js"]="43c873428186571ece9caaa4bae73e1573718230"
             ["assets/js/reporting-population.js"]="816d5421ad530112d9d367ad367e762d32191541"
             ["assets/js/statistics.js"]="34fda80ad3de0dae30aa4bb68cfc472a61a7285d"
-            ["assets/js/student-management.js"]="21e19bb38bc2f8c0137758976f8019c63ac824bc"
+            ["assets/js/student-management.js"]="791dd8cb4095ce686e79d1777f9e61bc385d2bf9"
             ["assets/js/supabase-client.js"]="82741fd1d72301b83e37e16a9bdd15048455d8ae"
-            ["assets/js/teacher-access.js"]="594903f1d53bbb0d3b5ece2f7af4662c5fe70ecd"
-            ["assets/js/teacher-admin.js"]="a9fc2493a0af073a887c3af364f8bc6a2e044d25"
+            ["assets/js/teacher-access.js"]="68d976ccf3a09460d000dcbfb5a42ef702d5629a"
+            ["assets/js/teacher-admin.js"]="f73d1fe412d2c595556e5a31a9857e002a6ff64c"
             ["assets/js/ui-helpers.js"]="6b52195b08e7612fc9871f3e907a2f0e7844a81c"
           )
 
