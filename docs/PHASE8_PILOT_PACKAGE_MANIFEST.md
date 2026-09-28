@@ -1,8 +1,8 @@
 # Phase 8 Pilot Package Manifest
 
-**Date:** 25 Sep 2026  
-**Exact runtime source:** `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`  
-**Pilot branch:** `pilot/phase-8-cleaned-v1-preview`  
+**Date:** 28 Sep 2026  
+**Exact runtime source:** `fe0b663846f361dc88514076c51d746fda05e5e0`  
+**Source state:** merged cleanup `main` after Phase 8D2; currently deployed pilot remains `dc8e29bbf727c1d4dacf9ad7986e28f450b75718` until manual replacement  
 **Purpose:** define the exact minimal runtime payload for the separate manual Netlify pilot without publishing repository-only files.
 
 ## Important correction
@@ -14,10 +14,21 @@ Therefore the reviewed runtime payload is:
 - 1 `index.html`
 - 16 files under `assets/js/`
 - 17 reviewed source files total
-- 99,231 bytes across those 17 source files, using GitHub's blob-size metadata
+- 99,942 bytes across those 17 source files, using GitHub's blob-size metadata
 - plus one generated deployment-only `_headers` file
 
 The generated `_headers` file is not part of the signed runtime source SHA. It reproduces the current `netlify.toml` response-header policy for the manual publish directory.
+
+### Phase 8D2 runtime delta
+
+Compared with the currently deployed pilot source `dc8e29bb…`:
+
+- **13 of 17 runtime files are byte-identical**;
+- only `app-state.js`, `student-management.js`, `teacher-access.js`, and `teacher-admin.js` changed;
+- `index.html`, `netlify.toml`, `auth-session.js`, `attendance-register.js`, reporting modules, and `supabase-client.js` are unchanged;
+- the runtime change is limited to latest-request guards for the three confirmed async races;
+- no SQL, Auth setting, Science object, credential, production export, or pupil dataset belongs in this package.
+
 
 ## Exact reviewed source files
 
@@ -27,7 +38,7 @@ The generated `_headers` file is not part of the signed runtime source SHA. It r
 | `assets/js/admin-dashboard.js` | `5c955e8c6bceaa329236a2801b7b2f697d298299` | 4,960 |
 | `assets/js/app-bootstrap.js` | `a5ed551751ab399531866641b2b93525ce752af2` | 2,604 |
 | `assets/js/app-navigation.js` | `b10f8e6aaf66a7a134247902a378ccc21fddfa3b` | 1,388 |
-| `assets/js/app-state.js` | `6e491cf10d9413d1a484cbac15f01d1d9451ee72` | 566 |
+| `assets/js/app-state.js` | `e9481e80940f1b6eb9f8c3c5504e950b558aa6de` | 614 |
 | `assets/js/attendance-register.js` | `86da0eb3ad45a510926a06173b3a14dbf485cae1` | 12,045 |
 | `assets/js/auth-session.js` | `a97e357e3bec0740ef8587d1f933739d25e7a114` | 4,103 |
 | `assets/js/date-helpers.js` | `82b76b7c4d208a04b4fd40ceabd31fbcd7151196` | 933 |
@@ -35,10 +46,10 @@ The generated `_headers` file is not part of the signed runtime source SHA. It r
 | `assets/js/period-reports.js` | `43c873428186571ece9caaa4bae73e1573718230` | 9,665 |
 | `assets/js/reporting-population.js` | `816d5421ad530112d9d367ad367e762d32191541` | 1,453 |
 | `assets/js/statistics.js` | `34fda80ad3de0dae30aa4bb68cfc472a61a7285d` | 4,327 |
-| `assets/js/student-management.js` | `21e19bb38bc2f8c0137758976f8019c63ac824bc` | 6,993 |
+| `assets/js/student-management.js` | `791dd8cb4095ce686e79d1777f9e61bc385d2bf9` | 7,124 |
 | `assets/js/supabase-client.js` | `82741fd1d72301b83e37e16a9bdd15048455d8ae` | 350 |
-| `assets/js/teacher-access.js` | `594903f1d53bbb0d3b5ece2f7af4662c5fe70ecd` | 6,627 |
-| `assets/js/teacher-admin.js` | `a9fc2493a0af073a887c3af364f8bc6a2e044d25` | 4,603 |
+| `assets/js/teacher-access.js` | `68d976ccf3a09460d000dcbfb5a42ef702d5629a` | 7,028 |
+| `assets/js/teacher-admin.js` | `f73d1fe412d2c595556e5a31a9857e002a6ff64c` | 4,734 |
 | `assets/js/ui-helpers.js` | `6b52195b08e7612fc9871f3e907a2f0e7844a81c` | 1,067 |
 
 Git blob SHAs are content-addressed identifiers for the exact repository blobs and are the authoritative package check for this checkpoint.
@@ -147,7 +158,7 @@ The workflow is intentionally packaging-only:
 
 - repository permission is `contents: read`;
 - it requires no repository or Supabase secrets;
-- it checks out frozen runtime SHA `dc8e29bbf727c1d4dacf9ad7986e28f450b75718`, not the workflow/PR head;
+- it checks out frozen Phase 8D2 runtime SHA `fe0b663846f361dc88514076c51d746fda05e5e0`, not the workflow/PR head;
 - it requires that exact checkout SHA;
 - it verifies all 17 reviewed Git blob SHAs listed in this manifest;
 - it verifies exactly 16 JavaScript modules;
@@ -156,11 +167,11 @@ The workflow is intentionally packaging-only:
 - it requires 18 deployment files total;
 - it rejects repository-only QA/docs/SQL/config paths from the package;
 - it prints per-file SHA-256 values into the Actions job summary;
-- it uploads artifact `phase8-pilot-package-dc8e29bb` with 30-day retention;
+- it uploads artifact `phase8-pilot-package-fe0b6638` with 30-day retention;
 - pinned `actions/upload-artifact` v7.0.1 records an artifact-level SHA-256 digest in the job summary; `actions/checkout` is likewise pinned to v7.0.1 by immutable commit SHA.
 
 The uploaded artifact is a package candidate only. It must be inspected before any manual Netlify upload.
 
 ## Status
 
-Package-builder implementation prepared on a focused CI branch. No package has been uploaded to Netlify, no Supabase Auth redirect has been changed, and production v0.7 remains untouched.
+Phase 8D2 package refresh is prepared as a packaging-only candidate. The currently hosted pilot has not been replaced yet. No package is automatically uploaded to Netlify, no Supabase Auth setting is changed by the workflow, and production v0.7 remains untouched.
